@@ -1,0 +1,222 @@
+/** Shop catalog and purchasing. REQ-SHOP-01, REQ-SHIP-03, REQ-SHOP-04. */
+import type { World } from "./world.ts";
+import { equipShip, equipWeapon, installShipUpgrade } from "./world.ts";
+import { grantShield } from "./ship.ts";
+import {
+  WEAPONS,
+  AMMO,
+  SHIPS,
+  EQUIPMENT,
+  GAME,
+  LOOT,
+  SHIELD,
+  ROCKET,
+  MINE,
+  SHOP,
+  UPGRADES,
+  UPGRADE_ORDER,
+  WeaponId,
+  AmmoId,
+  ShipId,
+  UpgradeId,
+} from "./constants.ts";
+
+export type ShopItemKind = "weapon" | "ammo" | "ship" | "upgrade" | "equipment";
+export type EquipmentRef = "life" | "shield" | "antigrav";
+
+export interface ShopItem {
+  id: string;
+  kind: ShopItemKind;
+  name: string;
+  price: number;
+  ref: WeaponId | AmmoId | ShipId | UpgradeId | EquipmentRef | "rocket" | "mine"; // what the purchase grants
+  desc: string;
+  random?: boolean; // stocked only randomly (see world.shopStock)
+}
+
+export const SHOP_ITEMS: ShopItem[] = [
+  {
+    id: "vulkan",
+    kind: "weapon",
+    name: WEAPONS.vulkan.name,
+    price: WEAPONS.vulkan.price,
+    ref: "vulkan",
+    desc: "Kurze Reichweite · Streuschuss · sehr schnell",
+  },
+  {
+    id: "ballista",
+    kind: "weapon",
+    name: WEAPONS.ballista.name,
+    price: WEAPONS.ballista.price,
+    ref: "ballista",
+    desc: "Große Reichweite · präzise · hoher Schaden",
+  },
+  {
+    id: "ammo-ap",
+    kind: "ammo",
+    name: `${AMMO.ap.name} ×${AMMO.ap.packSize}`,
+    price: AMMO.ap.price,
+    ref: "ap",
+    desc: "Doppelter Schaden pro Schuss",
+  },
+  {
+    id: "ammo-explosive",
+    kind: "ammo",
+    name: `${AMMO.explosive.name} ×${AMMO.explosive.packSize}`,
+    price: AMMO.explosive.price,
+    ref: "explosive",
+    desc: "Dreifacher Trefferradius",
+  },
+  {
+    id: "ammo-rocket",
+    kind: "ammo",
+    name: `Raketen ×${ROCKET.packSize}`,
+    price: ROCKET.price,
+    ref: "rocket",
+    desc: "Zielsuchend · S / ↓ abfeuern",
+  },
+  {
+    id: "ammo-mine",
+    kind: "ammo",
+    name: `Weltraum-Minen ×${MINE.packSize}`,
+    price: MINE.price,
+    ref: "mine",
+    desc: "Minenfeld hinterm Schiff · X wechseln",
+  },
+  {
+    id: "ship-deltaRaptor",
+    kind: "ship",
+    name: SHIPS.deltaRaptor.name,
+    price: SHIPS.deltaRaptor.price,
+    ref: "deltaRaptor",
+    desc: "Wendiger Interceptor · schneller & agiler",
+  },
+  {
+    id: "ship-titan",
+    kind: "ship",
+    name: SHIPS.titan.name,
+    price: SHIPS.titan.price,
+    ref: "titan",
+    desc: "Schlachtschiff · sehr träge · 2 Türme zur Maus · aufrüstbar",
+  },
+  {
+    id: "extra-life",
+    kind: "equipment",
+    name: "Extra-Leben",
+    price: EQUIPMENT.extraLife.price,
+    ref: "life",
+    desc: "+1 Leben",
+  },
+  {
+    id: "equip-shield",
+    kind: "equipment",
+    name: "Schild",
+    price: EQUIPMENT.shield.price,
+    ref: "shield",
+    desc: `Absorbiert ${SHIELD.capacity} Treffer, lädt nach`,
+    random: SHOP.randomEquipment.includes("equip-shield"),
+  },
+  {
+    id: "equip-antigrav",
+    kind: "equipment",
+    name: "Antigrav-Generator",
+    price: EQUIPMENT.antigrav.price,
+    ref: "antigrav",
+    desc: "Lenkt nahe Asteroiden ab",
+    random: SHOP.randomEquipment.includes("equip-antigrav"),
+  },
+  // Titan upgrades (only visible once the Titan is owned). REQ-SHIP-05.
+  ...UPGRADE_ORDER.map(
+    (id): ShopItem => ({
+      id: `upgrade-${id}`,
+      kind: "upgrade",
+      name: UPGRADES[id].name,
+      price: UPGRADES[id].price,
+      ref: id,
+      desc: UPGRADES[id].desc,
+    }),
+  ),
+];
+
+/** Shop pages in display order: Munition, Waffen, Schiffe, Upgrades, Ausrüstung. REQ-SHOP-02/04/05. */
+export const SHOP_PAGES: ShopItemKind[] = ["ammo", "weapon", "ship", "upgrade", "equipment"];
+
+/** Items belonging to a given page/category, in catalog order. */
+export function itemsForPage(kind: ShopItemKind): ShopItem[] {
+  return SHOP_ITEMS.filter((i) => i.kind === kind);
+}
+
+/** Items on a page that are actually available this visit. REQ-SHOP-04, REQ-SHIP-05. */
+export function visibleItems(world: World, kind: ShopItemKind): ShopItem[] {
+  return itemsForPage(kind).filter((i) => {
+    if (i.random && !world.shopStock.includes(i.id)) return false; // random equipment out of stock
+    if (i.kind === "upgrade" && !world.ownedShips.includes("titan")) return false; // upgrades need the Titan
+    return true;
+  });
+}
+
+export type PurchaseResult = "ok" | "equipped" | "insufficient" | "owned" | "max";
+
+/**
+ * Whether the player already owns this item. Weapons and ships are permanent unlocks;
+ * the shield is a fitted, self-recharging subsystem, so once installed it counts as owned
+ * (shown as equipped, not re-buyable). Ammo, extra lives and antigrav stay repeatable.
+ */
+export function isOwned(world: World, item: ShopItem): boolean {
+  if (item.kind === "weapon") return world.ownedWeapons.includes(item.ref as WeaponId);
+  if (item.kind === "ship") return world.ownedShips.includes(item.ref as ShipId);
+  if (item.kind === "upgrade") return world.shipUpgrades.includes(item.ref as UpgradeId);
+  if (item.kind === "equipment" && item.ref === "shield") return world.ship.shieldMax > 0;
+  return false;
+}
+
+/** Whether this item is the one currently equipped/active/installed (the "AUSGERÜSTET" row). */
+export function isEquipped(world: World, item: ShopItem): boolean {
+  if (item.kind === "weapon") return world.weapon === item.ref;
+  if (item.kind === "ship") return world.shipId === item.ref;
+  if (item.kind === "upgrade") return world.shipUpgrades.includes(item.ref as UpgradeId);
+  if (item.kind === "equipment" && item.ref === "shield") return world.ship.shieldMax > 0;
+  return false;
+}
+
+/** Attempt to buy an item, mutating the world's credits/loadout. */
+export function purchase(world: World, item: ShopItem): PurchaseResult {
+  // Owned ships/weapons can be re-equipped for free — switch loadout at the planet. REQ-SHIP-03.
+  if ((item.kind === "ship" || item.kind === "weapon") && isOwned(world, item)) {
+    if (isEquipped(world, item)) return "owned"; // already the active one
+    if (item.kind === "ship") equipShip(world, item.ref as ShipId);
+    else equipWeapon(world, item.ref as WeaponId);
+    return "equipped";
+  }
+  if (isOwned(world, item)) return "owned"; // installed shield — nothing to switch
+  if (item.id === "extra-life" && world.lives >= GAME.maxLives) return "max";
+  if (world.credits < item.price) return "insufficient";
+
+  world.credits -= item.price;
+
+  if (item.kind === "weapon") {
+    const id = item.ref as WeaponId;
+    if (!world.ownedWeapons.includes(id)) world.ownedWeapons.push(id);
+    world.weapon = id; // auto-equip the newly bought weapon
+  } else if (item.kind === "ship") {
+    const id = item.ref as ShipId;
+    if (!world.ownedShips.includes(id)) world.ownedShips.push(id);
+    equipShip(world, id); // auto-equip the newly bought ship
+  } else if (item.kind === "upgrade") {
+    installShipUpgrade(world, item.ref as UpgradeId); // fit the Titan upgrade
+  } else if (item.kind === "equipment") {
+    const ref = item.ref as EquipmentRef;
+    if (ref === "life") world.lives += 1;
+    else if (ref === "shield") grantShield(world.ship);
+    else if (ref === "antigrav") world.ship.antigrav += LOOT.antigravTime;
+  } else if (item.ref === "rocket") {
+    world.rocketAmmo += ROCKET.packSize;
+  } else if (item.ref === "mine") {
+    world.mineAmmo += MINE.packSize;
+  } else {
+    const id = item.ref as "ap" | "explosive";
+    world.ammoCounts[id] += AMMO[id].packSize;
+    world.ammo = id; // auto-select the ammo just bought
+  }
+  return "ok";
+}

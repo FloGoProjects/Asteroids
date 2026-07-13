@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ASTEROIDS // grungy sci-fi</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        background: #05060a;
+      }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      #game {
+        display: block;
+        position: fixed;
+        inset: 0;
+        cursor: crosshair;
+      }
+      #hint {
+        position: fixed;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%);
+        color: rgba(127, 231, 217, 0.65);
+        letter-spacing: 0.14em;
+        font-size: 13px;
+        text-transform: uppercase;
+        pointer-events: none;
+        text-shadow: 0 0 12px rgba(127, 231, 217, 0.4);
+        user-select: none;
+      }
+      #hint b {
+        color: #cfe9ff;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="hint">
+      <b>W / &uarr;</b> Schub &nbsp;·&nbsp; <b>A D / &larr; &rarr;</b> Drehen &nbsp;·&nbsp;
+      <b>Leertaste</b> Feuern &nbsp;·&nbsp; <b>S / &darr;</b> Rakete/Mine &nbsp;·&nbsp;
+      <b>X</b> Rakete&harr;Mine &nbsp;·&nbsp; <b>E</b> Waffe &nbsp;·&nbsp; <b>Q</b> Munition
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "asteroids",
+  "version": "0.1.0",
+  "description": "Asteroids - modern grungy sci-fi remake (TypeScript + Canvas)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "reqcheck": "node scripts/reqcheck.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

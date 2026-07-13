@@ -1,0 +1,915 @@
+{
+  "project": "Asteroids",
+  "description": "Modernes Asteroids-Remake im grungy Sci-Fi Stil. TypeScript + HTML5 Canvas, Spiellogik nach TDD (Vitest) entwickelt und vom Rendering getrennt.",
+  "stack": {
+    "language": "TypeScript",
+    "rendering": "HTML5 Canvas",
+    "testFramework": "Vitest",
+    "bundler": "Vite"
+  },
+  "style": {
+    "theme": "Grungy / Sci-Fi",
+    "notes": "Düster-industriell: dunkler Weltraum, rauchige Partikel, Rot/Orange-Warnakzente, feine Vektor-Linien mit dezentem Glow, Screen-Shake bei Impacts.",
+    "playerShip": "Vanguard — schwerer, gepanzerter Jäger (Schulterplatten, zwei Buggeschütze, Doppeltriebwerk, türkises Cockpit). Vektorgrafik in src/render/renderer.ts (drawShip), Ausrichtung entlang +x. Auch als Leben-Icon im HUD.",
+    "plannedShips": "Delta Raptor (Design B) als späterer Shop-Kauf vorgemerkt."
+  },
+  "conventions": {
+    "coordinateSystem": "Ursprung oben links, x nach rechts, y nach unten. Winkel in Radiant, 0 = nach rechts (+x), im Uhrzeigersinn positiv.",
+    "units": "Positionen/Geschwindigkeiten in Pixel bzw. Pixel pro Sekunde. dt in Sekunden.",
+    "determinism": "Weltlogik ist deterministisch bei gegebenem Input und gegebenem RNG-Seed (für Testbarkeit)."
+  },
+  "milestones": {
+    "v1": "Kern-Gameplay minimal: Schiff steuern, schießen, ein Asteroidentyp, Kollision.",
+    "v1.1": "Asteroiden-Splitting & drei Größen (large/medium/small) mit größenabhängigem Score.",
+    "v1.2": "Waffen (Basis-Laser, Vulkan MK, Ballista), Munition (Standard/Panzerbrechend/Explosiv), Asteroiden-HP & Schadenssystem, Credit-Währung. Foundation für den Shop.",
+    "v1.3": "Driftender Shop-Planet: erscheint periodisch, zieht waagrecht durch und verschwindet (Rendering mit Landezone-Markierung).",
+    "v1.4": "Lande-Mechanik (Schiff auf dem Planeten halten, Fortschrittsanzeige) + Shop-Menü (Welt pausiert; Waffen & Munition für Credits kaufen, Tastatur-Navigation).",
+    "v1.5": "Schiff-Subsystem & Delta Raptor: mehrere besessene Schiffe mit eigenen Flugwerten (Vanguard/Delta Raptor), im Shop kaufbar & auto-ausgerüstet, eigene Grafik. Delta Raptor = wendiger Interceptor.",
+    "v1.6": "Wellen (nach Leerräumen kommt die nächste, stärkere Welle mit mehr/schnelleren Asteroiden, Banner + HUD-Zähler) + Shop-Umbau: drei Seiten (Munition/Waffen/Schiffe) mit Tab-Navigation und Item-Icons.",
+    "v1.7": "Gegner (feindliche Jäger, die gezielt schießen, HP haben und Loot fallen lassen), Loot & Spezialausrüstung (Schild, Antigrav-Generator, Munition) zum Aufsammeln, Shop-Navigation zusätzlich mit WASD.",
+    "v1.8": "Shop-Seite 'Ausrüstung': Extra-Leben (bis GAME.maxLives) und Spezialausrüstung (Schild/Antigrav), die pro Besuch nur mit 50% Chance im Sortiment ist (rollShopStock beim Öffnen, visibleItems filtert die Anzeige).",
+    "v1.9": "Aufladbarer Trefferschild (SHIELD.capacity Ladungen, Recharge nach Pause statt Zeit-Unverwundbarkeit), gegnerische Raumstationen (ab Welle 2, langsam, ohne Schüsse, stark gepanzert) und Boss-Asteroiden (alle WAVE.bossEvery Wellen, zerfallen in mehrere Große, Loot).",
+    "v1.10": "Zielsuchende Raketen: eigene Ressource (kaufbar auf der Munitions-Seite, findbar als Loot), Abschuss mit S / Pfeil-runter, erfassen das nächste Ziel im Kegel vor dem Schiff, verfolgen mit begrenzter Drehrate und suchen bei Zielverlust neu. Zusätzlich Balance v1.9.1 (Vulkan Einzelschuss/30°, Schild schwächer & teurer) und Robustheitsfix Asteroiden-Spawn.",
+    "v1.11": "Waffen-/Munitionswechsel per E/Q; Weltraum-Minen als zweite Sekundärwaffe (Umschalten Rakete/Mine mit X, Feuertaste S/↓ geteilt): kleines Minenfeld hinter dem Schiff, detoniert an Asteroiden/Gegnern, im Shop kaufbar. Sekundärwaffen-Slot vereinheitlicht (fireSecondary/secondaryCooldown).",
+    "v1.11.1": "Balance/Schwierigkeit: Asteroiden-Credits vom Score entkoppelt und stark gesenkt (ASTEROID.sizes.*.credits: klein 30/mittel 15/groß 6/Boss 150; Score unverändert) — Abschüsse werden Haupteinnahme. Gegner-Credits erhöht (Jäger 320, Station 750). Ab Welle 2 kann ein Spawn einen Flügelmann mitbringen (ENEMY.pairFromWave/pairChance, maxAlive 2->3), damit zwei Gegner gleichzeitig angreifen. Schild-Loot selten: LOOT.shieldDropChance 0.06 statt 25% (restliche Wahrscheinlichkeit gleichmäßig auf Antigrav/Munition/Rakete).",
+    "v1.12": "Raumstationen bekommen eine aufladende Strahlwaffe (REQ-ENEMY-02 erweitert). Zustandsmaschine in enemy.ts (advanceStationBeam: idle/charging/firing, STATION.beamAim/beamCharge/beamTime/beamCooldown), Aim wird zu Ladebeginn fixiert. Linien-Kollision segmentHitsCircle in collision.ts (Strahl vs. Schiff, respektiert Schild/Invuln via damageShip). world.ts feuert den Strahl im station-Zweig von updateEnemies (fireStationBeam). Rendering: gestrichelte, heller werdende Ziellinie beim Laden + dicker roter Strahl mit weißem Kern beim Feuern (drawStation). Live im Browser verifiziert (Screenshots Lade- + Feuerphase).",
+    "v1.12.1": "Zwei Shop-Bugfixes. (1) Montierter Schild wurde nicht als 'AUSGERÜSTET' angezeigt und war sinnlos erneut kaufbar: isOwned (shop.ts) behandelt equip-shield jetzt als besessen, wenn ship.shieldMax>0 (Schild ist ein aufladbares Dauer-Subsystem; Extra-Leben/Antigrav bleiben wiederholbar kaufbar). (2) Shop-Icons für Raketen (ammo-rocket) und Minen (ammo-mine) fehlten in drawShopIcon (renderer.ts) — Fälle ergänzt (Missile mit Heckflossen+Flamme; Stachelmine mit Trigger-Licht). Verifiziert: Unit-Test (isOwned) + sichtbarkeits-unabhängige Offscreen-Render-Checks (drawShopIcon-Pixelzahl je Item; fillText-Spy zeigt 'AUSGERÜSTET' nur bei montiertem Schild).",
+    "v1.16.1": "Gegner-Basen Etappe 8 — Schildgenerator-Modul (REQ-BASE-02). base.ts: createBase weist Nicht-Kern-Modulen mit BASE.shieldModuleChance (0.35) Typ 'shield' zu; neue areNeighbors + isModuleShielded (lebender Schild-Nachbar schützt, Generator selbst nie). world.ts damageModule: geschützte Module absorbieren Treffer (onShieldHit, kein hp-Abzug). Renderer drawBase: Schildgeneratoren cyan mit Schild-Emblem, geschützte Module mit pulsierendem cyan Overlay. Verifiziert per Unit-Tests (Nachbarschaft, Schutz nur für Nachbarn/nie sich selbst, Kern geschützt bis Generator zerstört) + Offscreen (4730 cyan px mit Schild vs 0 ohne).",
+    "v1.16": "Gegner-Basen Etappe 7 — Framework für modulare Basen (REQ-BASE-01). Neues Modul src/game/base.ts (Base/BaseModule, axiale Hex-Koords, createBase = zufälliges zusammenhängendes Cluster, hexOffset flat-top, moduleWorldPos, updateBase drift/wrap/life, liveModules, isBaseDead). BASE-Konstanten. world.bases; spawnBase (ab BASE.fromWave ersetzt BASE.chance der Stations-Spawns eine Basis); updateBases (Drift + Ablauf), retireDeadBases (Explosion+Loot nach Kollisionen); damageModule (Score/Credits pro Modul), hitBases (Bullets direkt+Explosiv-AoE, Raketen, Minen treffen Module). Renderer drawBase (Hex-Module, Kern hervorgehoben, Schadens-Tint). Stage 7 = nur Panzer-Module (noch keine Waffen). Fix: Wellen-2-Paar-Test-RNG 0.1→0.45 (0.1 fiel neu in den Basis-Zweig). Verifiziert per Unit-Tests + Offscreen (6-Modul-Cluster 9445 px, nach Halb-Zerstörung 5292 px).",
+    "v1.15.1": "Munitions-Feinschliff (REQ-AMMO-01): (1) Auto-Umschalten — beim Aufsammeln von Munitions-Loot wechselt applyLoot von Standard automatisch auf 'ap' (Spezialwahl bleibt sonst erhalten). (2) Größere Pakete — AMMO.ap.packSize 25->60, explosive 20->50, LOOT.ammoGrant 12->30. (3) Explosiv-Redesign — statt radiusMult 3 jetzt Näherungszünder: AmmoSpec.blast, explosive.blast 42 (radiusMult zurück auf 1). Bullet.blast (createBullet 6. Param, default 0); fireWeapon reicht ammo.blast durch. Kollision: Bullets mit blast>0 detonieren, sobald ein Ziel in blast+radius ist, und schädigen ALLE Ziele im Radius (kleine AoE) -> vereinfacht Zielen. Renderer drawBullet erkennt Explosiv über blast>0 (BULLET-Import entfernt) + zeichnet Näherungs-Aura. Verifiziert per Unit-Tests (Proximity zerstört Ziel neben der Flugbahn, Standard nicht; Auto-Switch) + Offscreen (orange Aura 5544 vs 208 px).",
+    "v1.15": "Politur & Feinschliff: (1) Pause mit Taste P (GameState 'paused', updateWorld friert ein, Renderer zeigt Schiff eingefroren + PAUSE-Overlay, main.ts toggelt). (2) Titan-Shopbeschreibung korrigiert (2 statt 3 Türme, 'sehr träge · aufrüstbar'). (3) Loot-Rebalance: Raketen jetzt selten (rocketDropChance 0.12 statt ~31%), Minen als neuer Loot-Typ gelegentlich (mineDropChance 0.12, MINE.lootGrant 4, LootKind+='mine', applyLoot+drawLoot-Glyph+LOOT_HUE). (4) Wingman-Rework: greifen NUR Gegner an (nearestEnemyInRange, ignorieren Asteroiden), brechen aus Formation aus und fliegen WINGMAN.engageDist auf den Gegner zu (flankierend), sind abschießbar durch Gegner-Projektile (world.wingmanRespawn Timer, Respawn nach WINGMAN.respawn=12s). Verifiziert per Unit-Tests + Offscreen (Pause-Overlay, Minen-Glyph, Wingmen-Ø x 300->420 Richtung Gegner).",
+    "v1.14.4": "Titan-Upgrade Etappe 6: Hangar (upgrade-hangar, 3000 CR) — letztes Titan-Upgrade. Neue Entität: Modul src/game/wingman.ts (Wingman, createWingman, steerWingman = exponentielle Formationsglättung + Snap bei WINGMAN.snapDist für Screen-Wrap). world.wingmen + updateWingmen(world,dt) in updateWorld: reconcilet auf WINGMAN.count wenn shipId titan + hangar installiert (sonst entlassen), steuert je Drohne zum Formations-Slot (ship + rotate(offset, angle)) und feuert per nearestTargetInRange(WINGMAN.range) autonom (eigene Bullets). Renderer: drawWingman (kleines türkises Delta, zeigt aufs Ziel), im Loop vor drawShip gezeichnet; Hangar-Startbuchten am Rumpf-Heck; Shop-Icon. WICHTIG: Wingmen sind (v1) unzerstörbar/persistierend. 6 neue Tests (3 wingman-Modul, 2 world, 1 shop). Verifiziert per Unit-Tests + Offscreen (2 Drohnen in Formation je 324 px, Hangar-Bucht 202 px, Icon 740 px). DAMIT ALLE 5 TITAN-UPGRADES FERTIG.",
+    "v1.14.3": "Titan-Upgrade Etappe 5: Traktorstrahl (upgrade-tractor, 2400 CR). Wirtschafts-Upgrade: updateTractor(world) in updateWorld (vor Asteroiden-Bewegung) zieht kleine Asteroiden in TRACTOR.range zum Schiff (setzt velocity, überschreibt Drift), zerlegt sie am Rumpf (Grab bei ship.radius+a.radius+grabMargin, Margin > Fixstep-Weg → keine Kollision) und zahlt credits*absorbCreditMult (=5, kleiner Brocken 30→150); zieht außerdem Loot heran (existierender Fly-over-Pickup sammelt es). Renderer: Emitter-Schale am Rumpf + drawTractorField (violettes Ring + Strahlen zu erfassten Brocken/Loot, in render() vor drawShip), Shop-Icon. Verifiziert per Unit-Tests (Absorb+Bonus-Credits, Loot-Zug) + Offscreen (Emitter 50 px, Strahl-Mittelpunkt violett 88/76/127, Icon 594 px). Nutzer-Wunsch: deutlich Extra-Credits, damit nicht schwächer als Autogeschütz.",
+    "v1.14.2": "Titan-Upgrade Etappe 4: Autogeschütz (upgrade-autocannon, 2200 CR) — Titan-Basis nochmal langsamer (turnSpeed 1.15, thrust 90, maxSpeed 150). Dritter Turm (ship.hasAutocannon/autoAimAngle/autoCooldown), zielt via nearestTargetInRange(AUTOCANNON.range) aufs nächste Enemy/Asteroid und feuert selbst (updateAutocannon in updateWorld, eigene Bullets, AUTOCANNON-Konstanten). Renderer: schwenkender Turm auf dem Vorderdeck (autoAimAngle an drawShip/drawTitanBody), Shop-Icon. Verifiziert per Unit-Tests (feuert aufs Ziel / hält ohne Ziel) + Offscreen (Turm-Render 210 px, Icon 651 px).",
+    "v1.14.1": "Titan-Upgrade Etappe 3: Triebwerke (upgrade-engines, 1600 CR) — +Schub/+Tempo/+Wendigkeit (TITAN_UPGRADE.engine*), sichtbar als leuchtende blaue Heckdüsen. Gleiches Framework wie Schildgenerator. Verifiziert per Unit-Test + Offscreen (Heck-Farbwechsel 263 px, Icon 480 px).",
+    "v1.14": "Titan-Rebalance + Upgrade-System (REQ-SHIP-05, Etappe 1+2). Nerf: shieldCapacity 3->1, 3->2 Türme, deutlich langsamer (turnSpeed 2.4->1.6, thrust 220->140, maxSpeed 300->200). Upgrade-Fundament: constants UpgradeId/UPGRADES/UPGRADE_ORDER/TITAN_UPGRADE; world.shipUpgrades + installShipUpgrade; equipShip berechnet Titan-Werte aus Basis+Upgrades (idempotent). Erstes Upgrade Schildgenerator (+3 Schild). Shop: neue Seite 'UPGRADES' (SHOP_PAGES erweitert), nur mit Titan sichtbar (sonst Hinweis), kind 'upgrade'. Renderer: Schildkuppel am Heck bei installiertem Upgrade (drawShip bekommt upgrades-Param), Shop-Icon, Tab-Label, Leerseiten-Hinweis; main.ts Nav-Guard gegen leere Seite. GEPLANT (nächste Etappen): Triebwerke, Autogeschütz, Traktorstrahl, Hangar; danach modulare Gegner-Basen (mehrere 6-Ecke: Schildgen/Hangar/Plasmaflak).",
+    "v1.13.1": "Bugfix Schiffwechsel im Shop: der Shop unterschied nicht zwischen 'besessen' und 'ausgerüstet' -> jedes besessene Schiff zeigte AUSGERÜSTET und purchase gab 'owned' zurück, ein Wechsel war unmöglich. Neu isEquipped() (shop.ts); purchase re-equippt ein besessenes, nicht aktives Schiff/Waffe kostenlos (Result 'equipped'), nur das aktive zeigt AUSGERÜSTET, die übrigen 'WECHSELN'. Renderer nutzt isEquipped statt isOwned für das Label + WECHSELN-Zeile. Verifiziert per Unit-Tests + Offscreen-fillText-Spy (AUSGERÜSTET beim aktiven, WECHSELN beim anderen Schiff).",
+    "v1.13": "Drittes Schiff 'Titan' (Schlachtschiff) mit maus-gezielten Türmen (REQ-SHIP-04). Neuer ShipSpec-Felder shieldCapacity + turrets (TurretMount[]). Träge Flugwerte, 3 Ladungen eingebaute Schilde, 3 Türme. Maus-Eingabe: keyboard.ts trackt Zeiger als Input.aim + linke Maustaste feuert (kombiniert mit Leertaste). world.ts: aimAngle aus Input.aim, fireWeapon feuert aus jeder Turmmündung entlang aimAngle (Ammo einmal pro Salve), equipShip überträgt Türme + stuft Schild monoton hoch. Renderer: drawTitanBody (Rumpf + zur Maus schwenkende Läufe), Shop-Icon, drawShip bekommt aimAngle. Shop-Item ship-titan (6500 CR). Verifiziert: 5 neue Unit-Tests + sichtbarkeits-unabhängige Offscreen-Pixelchecks (Turm-Mündung folgt Zielpunkt, Schiff/Icon rendern). HINWEIS: kein Live-Screenshot möglich (Browser-Pane hidden -> rAF pausiert).",
+    "future": "Weitere Ideen: mehr Schiffe/Waffen/Gegnertypen, Highscore/Persistenz (localStorage), Soundeffekte/Musik.",
+    "v1.17": "Gegner-Basen Etappe 9 — Plasmaflak-Modul (REQ-BASE-03). base.ts: BaseModule.fireTimer? optional; createBase wählt Nicht-Kern-Module gewichtet (shield/flak/Panzerung). constants.ts: BASE.flakModuleChance + BASE.flak {fireCooldown,bulletSpeed,bulletLife,bulletRadius,damage,range,muzzleGap}. world.ts: updateBaseWeapons + fireFlak (Doppellauf senkrecht versetzt) in updateBases, Bolzen -> world.enemyBullets, Reichweiten-Gate. renderer.ts drawBase: Flak-Module bernsteinfarben mit rotierendem Doppellauf-Hub. 3 neue Unit-Tests (feuert auf Schiff / kein Flak feuert nicht / zerstörtes Flak feuert nicht). Tests 195->198, tsc strict grün.",
+    "v1.18": "Gegner-Basen Etappe 10 — Hangar-Modul (REQ-BASE-04), Basen-Feature-Set komplett. base.ts: BaseModule.spawnTimer? optional; createBase erweitert die gewichtete Typwahl um 'hangar'. constants.ts: BASE.hangarModuleChance + BASE.hangar {cooldown 6.0, maxFighters 4, launchSpeed 90}; shield/flak-Chancen leicht gesenkt (0.3/0.28) fuer Platz. world.ts: launchFighter (createEnemy 'fighter' Richtung Schiff) + hangar-Zweig in updateBaseWeapons (spawnTimer runter, Start bei <=0 sofern enemies.length < maxFighters). renderer.ts drawBase: Hangar-Module goldener Gradient/Rand + Startbucht-Trapez mit blinkender Leitlinie. 3 neue Unit-Tests (startet Jaeger / respektiert Cap / zerstoert startet nichts). Tests 198->201, tsc strict gruen. Offscreen-Render bestaetigt Flak/Hangar/Schild-Faerbung.",
+    "v1.18.1": "Basen-Renderer-Bugfix (Nutzer-Feedback), keine Logik-/Teständerung (201/201). renderer.ts drawBase komplett überarbeitet: hexPath(mult) mit Skalierung; ALLE Module teilen jetzt denselben warmen Metall-Körper (Gradient #33/#4c bzw. Kern rötlich) statt je Typ vollflächig cyan/amber/gold eingefärbt zu werden -> Mehr-Hex-Basen wirken wie Cluster der schönen Einzel-Basis; Waffenmodule nur noch mit farbigem Akzent-Rand (flak amber / hangar gold) + Emblem. Schild jetzt UNMISSVERSTÄNDLICH: cyan Energiebarriere (hexPath 1.07 Fill+heller Rand + innerer Shimmer 0.82) ueber Schildgenerator UND jedem geschuetzten Modul (Bedingung isShield||shielded), plus hellerer Emitter-Crest. Behebt drei gemeldete Punkte: (1) Look-Inkonsistenz Einzel- vs. Mehr-Hex, (3) unsichtbares Schild, und damit (2) 'Laser wirkt nicht' = geschuetzte Module absorbieren Treffer korrekt, war nur nicht sichtbar. Offscreen-Render (PNG) bestaetigt.",
+    "v1.18.2": "Basen-Politur nach Nutzer-Feedback (keine Logik-/Teständerung, 201/201). (1) Schönere große Basen: base.ts createBase-Wachstum von zufälligem Ranken auf KOMPAKTES Wachstum umgestellt (Kandidaten = an Cluster angrenzende Leerzellen; gewählt wird die mit den meisten bereits belegten Nachbarn, Gleichstand per rng) -> runde, honigwaben-dichte, station-artige Cluster statt straggliger Linien. renderer.ts drawBase: neue Hüllen-Streben zwischen benachbarten Live-Modulen (2-Pass: dunkle Platte s*1.05 + heller Inlay-Naht s*0.42), gezeichnet unter den Modul-Platten -> Cluster liest sich als EINE Station. areNeighbors in renderer importiert. (2) Laser-Sichtbarkeit: Z-Order-Bug behoben - Projektil-Zeichnung (bullets/enemyBullets/rockets/mines) von VOR den Feldobjekten nach NACH Asteroiden/Gegnern/Basen verschoben; vorher wurde der Spielerlaser, der in eine große Basis flog, von der Basis uebermalt (Flak-Bolzen flogen ins Leere und blieben sichtbar -> Eindruck 'nur Flak feuert'). Der Laser feuerte und traf die ganze Zeit korrekt (Kern 4->2 im Test), war nur verdeckt. Offscreen-Render bestaetigt: Laser jetzt sichtbar auf der Basis, Basen kompakt.",
+    "v1.19": "Gegner-Basen -> GEGNER-SCHLACHTSCHIFFE (Nutzerwunsch, 198/198). Hex-Modul-Modell ersetzt durch drei Einzelschiff-Designs mit je EINEM Lebensbalken. constants.ts: BattleshipDesign + BATTLESHIPS (dreadnought/mandible/fortress: hp/radius/speed/score/credits/shieldMax + Waffen-Spec pellets/spread/muzzleGap/range + hangar-Felder), BASE auf {fromWave,chance,life,shieldRechargeDelay} reduziert. base.ts: Base neu {design,angle,hp,maxHp,shield,shieldMax,shieldRecharge,radius,life,wobble,fireTimer,hangarTimer}; createBattleship, updateBase (drift/wrap/life + Schild-Recharge), isBaseDead=hp<=0. world.ts: spawnBase wählt Design; damageBase (Schild absorbiert, sonst hp); hitBases = einzelner Hüllen-Kreis; fireBattleshipGun (Streufächer/parallele Mündungen) + Festungs-Hangar in updateBaseWeapons; retireDeadBases vergibt score/credits. renderer.ts drawBase komplett neu: battleshipHull-Silhouetten + drawDreadnought/drawMandible/drawFortress (Rumpf, Triebwerks-Glow, Kernauge, Hangarbucht, Türme), Schild als cyan Rumpf-KONTUR (nicht Füllung, Helligkeit nach Ladungen, gestrichelt wenn leer) + Lebensbalken drawBaseHealthBar (grün/amber/rot + blaue Schild-Subleiste). Tests: base.test.ts neu (6), world.test Basis-Blöcke neu (enemy battleships/shield/weapons). Alte Hex-Exports (createBase/moduleWorldPos/isModuleShielded/liveModules/areNeighbors/BaseModule/hexOffset) entfernt."
+  },
+  "testStatus": {
+    "lastRun": "2026-07-13",
+    "summary": "alle Tests grün (198/198); TypeScript strict typecheck ohne Fehler. GROSSER UMBAU v1.19 (Nutzerwunsch): die Hex-Modul-Basen wurden durch drei große GEGNER-SCHLACHTSCHIFFE ersetzt — A Dreadnought (Twin-Kanone+Schild), B Mandibel-Räuber (Streuschuss, Kernauge, kein Schild), C Werft-Festung (Flak+Hangar+Schild). Ein Lebensbalken pro Schiff (kein Modul-Zerlegen mehr), passende Waffen je Design, Schild als blaue Rumpf-Linie wie beim Spielerschiff. base.ts/constants.ts/world.ts/renderer.ts + Tests komplett auf das neue Modell umgestellt (base.test 6, world.test Basis-Blöcke neu). Verifiziert per Offscreen-Render (Galerie der 3 Schiffe + Kampfszene: Laser sichtbar, Schild-Linie, Lebensbalken, Schild absorbiert 2 Treffer).",
+    "total": 198,
+    "passed": 198,
+    "failed": 0,
+    "typecheck": "pass",
+    "command": "npm test"
+  },
+  "requirements": [
+    {
+      "id": "REQ-VEC-01",
+      "title": "2D-Vektormathematik",
+      "category": "engine",
+      "priority": "must",
+      "description": "Grundlegende, unveränderliche 2D-Vektoroperationen: add, sub, scale, length, normalize, fromAngle, rotate, distance. Basis für alle Physikberechnungen.",
+      "acceptanceCriteria": [
+        "add/sub/scale liefern neue Vektoren ohne Mutation der Eingaben.",
+        "length und distance sind euklidisch korrekt.",
+        "normalize eines Nullvektors liefert den Nullvektor (kein NaN).",
+        "fromAngle(0) zeigt nach +x; fromAngle(PI/2) zeigt nach +y."
+      ],
+      "testFile": "test/vector2.test.ts",
+      "tests": [
+        "add returns a new vector without mutating inputs",
+        "sub subtracts component-wise",
+        "scale multiplies by a scalar",
+        "length is euclidean",
+        "distance is euclidean between two points",
+        "normalize returns a unit vector",
+        "normalize of the zero vector returns zero (no NaN)",
+        "fromAngle(0) points along +x",
+        "fromAngle(PI/2) points along +y",
+        "rotate turns a vector by an angle",
+        "limit caps magnitude but keeps direction",
+        "limit leaves shorter vectors untouched"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-WRAP-01",
+      "title": "Bildschirm-Umlauf (Toroidale Welt)",
+      "category": "engine",
+      "priority": "must",
+      "description": "Objekte, die einen Weltrand überschreiten, erscheinen auf der gegenüberliegenden Seite wieder.",
+      "acceptanceCriteria": [
+        "Position < 0 wird um Weltbreite/-höhe erhöht.",
+        "Position >= Weltgröße wird um Weltbreite/-höhe verringert.",
+        "Funktioniert unabhängig für x und y."
+      ],
+      "testFile": "test/wrap.test.ts",
+      "tests": [
+        "leaves in-bounds values unchanged",
+        "wraps negative values to the far side",
+        "wraps values at/over the max back to the start",
+        "wrapVec wraps x and y independently"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHIP-01",
+      "title": "Schiff: Rotation",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Das Schiff dreht sich bei Links-/Rechts-Input mit konstanter Winkelgeschwindigkeit.",
+      "acceptanceCriteria": [
+        "turnLeft verringert den Winkel, turnRight erhöht ihn (im gewählten Koordinatensystem).",
+        "Drehung ist proportional zu dt.",
+        "Ohne Dreh-Input bleibt der Winkel unverändert."
+      ],
+      "testFile": "test/ship.test.ts",
+      "tests": [
+        "turnRight increases the angle proportionally to dt",
+        "turnLeft decreases the angle",
+        "keeps the angle when no turn input is given"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHIP-02",
+      "title": "Schiff: Schub & Trägheit",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Schub beschleunigt das Schiff in Blickrichtung; ohne Schub gleitet es mit Reibung weiter (Trägheit).",
+      "acceptanceCriteria": [
+        "Schub erhöht die Geschwindigkeit in Richtung des aktuellen Winkels.",
+        "Ohne Schub nimmt die Geschwindigkeit durch Reibung ab, ohne die Richtung sofort umzukehren.",
+        "Die Geschwindigkeit ist auf eine Maximalgeschwindigkeit begrenzt.",
+        "Die Position aktualisiert sich anhand der Geschwindigkeit und läuft am Rand um."
+      ],
+      "testFile": "test/ship.test.ts",
+      "tests": [
+        "thrust accelerates in the facing direction",
+        "keeps gliding (inertia) and slows down via friction without thrust",
+        "caps speed at the maximum",
+        "moves the position by velocity and wraps around the edges"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-BULLET-01",
+      "title": "Schießen: Projektil-Erzeugung",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Beim Feuern entsteht ein Projektil an der Schiffsspitze, das sich in Blickrichtung bewegt.",
+      "acceptanceCriteria": [
+        "Ein neues Projektil startet an der Schiffsspitze (Position + Blickrichtung * Radius).",
+        "Die Projektilgeschwindigkeit zeigt in Blickrichtung des Schiffs.",
+        "Ein Feuer-Cooldown verhindert unbegrenzt schnelles Dauerfeuer."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "spawns a bullet at the ship nose moving in the facing direction",
+        "enforces a fire cooldown (no unlimited rapid fire)"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-BULLET-02",
+      "title": "Projektil: Lebensdauer & Umlauf",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Projektile bewegen sich, laufen am Rand um und verschwinden nach einer maximalen Lebensdauer.",
+      "acceptanceCriteria": [
+        "Position aktualisiert sich anhand der Geschwindigkeit und läuft am Rand um.",
+        "Nach Ablauf der Lebensdauer gilt das Projektil als abgelaufen und wird entfernt."
+      ],
+      "testFile": "test/bullet.test.ts, test/world.test.ts",
+      "tests": [
+        "moves according to its velocity",
+        "wraps around the edges",
+        "counts down its lifetime and expires",
+        "removes expired bullets (world)"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-AST-01",
+      "title": "Asteroid: Bewegung & Umlauf",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Asteroiden bewegen sich geradlinig mit konstanter Geschwindigkeit und laufen am Rand um.",
+      "acceptanceCriteria": [
+        "Position aktualisiert sich anhand der Geschwindigkeit.",
+        "Asteroiden laufen an allen Rändern um.",
+        "Ein Asteroid hat eine Größe (large/medium/small) mit daraus abgeleitetem Kollisionsradius."
+      ],
+      "testFile": "test/asteroid.test.ts",
+      "tests": [
+        "moves according to its velocity",
+        "wraps around all edges",
+        "derives its collision radius from its size"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-AST-02",
+      "title": "Asteroiden zerbrechen (Splitting)",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Wie im Original zerbricht ein getroffener Asteroid in kleinere Fragmente: groß -> 2 mittel, mittel -> 2 klein, klein -> zerstört. Der Score hängt von der Größe ab.",
+      "acceptanceCriteria": [
+        "Ein großer Asteroid zerfällt in 2 mittlere, ein mittlerer in 2 kleine.",
+        "Ein kleiner Asteroid wird ohne Fragmente zerstört.",
+        "Fragmente entstehen an der Position des zerstörten Asteroiden.",
+        "Fragmente erhalten auseinanderlaufende Flugrichtungen und mindestens die Geschwindigkeit des Elternteils.",
+        "Der Score erhöht sich um den größenabhängigen Wert (klein > mittel > groß)."
+      ],
+      "testFile": "test/asteroid.test.ts, test/world.test.ts",
+      "tests": [
+        "splits a large asteroid into two medium ones at its position",
+        "splits a medium asteroid into two small ones",
+        "does not split a small asteroid (it is destroyed)",
+        "gives children diverging headings and at least the parent's speed",
+        "replaces a large asteroid with two medium ones and scores the large value (world)"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-COL-01",
+      "title": "Kollision: Kreis-Kreis-Erkennung",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Kollisionen werden per Kreis-Kreis-Distanztest erkannt.",
+      "acceptanceCriteria": [
+        "Überlappen sich zwei Kreise (Distanz < Summe der Radien), gilt es als Kollision.",
+        "Berühren/Trennen exakt an der Summe der Radien gilt nicht als Kollision.",
+        "Berücksichtigt keine Umlauf-Distanz in v1 (dokumentierte Vereinfachung)."
+      ],
+      "testFile": "test/collision.test.ts",
+      "tests": [
+        "detects overlapping circles",
+        "reports no hit when circles are far apart",
+        "treats exact touching (distance == sum of radii) as no hit"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-COL-02",
+      "title": "Projektil trifft Asteroid",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Trifft ein Projektil einen Asteroiden, werden beide entfernt und der Score erhöht.",
+      "acceptanceCriteria": [
+        "Getroffene Asteroiden werden aus der Welt entfernt.",
+        "Das treffende Projektil wird entfernt.",
+        "Der Score erhöht sich pro Treffer."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "destroys a small asteroid, removes the bullet and scores its value"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-COL-03",
+      "title": "Schiff trifft Asteroid",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Kollidiert das Schiff mit einem Asteroiden, verliert der Spieler ein Leben; bei 0 Leben ist das Spiel vorbei.",
+      "acceptanceCriteria": [
+        "Bei Kollision sinkt die Anzahl der Leben um 1.",
+        "Das Schiff wird zurückgesetzt (Position Mitte, Geschwindigkeit 0) solange Leben > 0.",
+        "Bei 0 Leben wechselt der Spielzustand zu 'gameover'."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "loses a life and resets the ship while lives remain",
+        "ends the game when the last life is lost",
+        "uses the ship collision radius from constants"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-WORLD-01",
+      "title": "Weltzustand & Update-Schleife",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Die Welt hält Schiff, Projektile und Asteroiden und aktualisiert alle pro Frame deterministisch.",
+      "acceptanceCriteria": [
+        "world.update(dt, input) aktualisiert Schiff, Projektile, Asteroiden und wertet Kollisionen aus.",
+        "Feuern erzeugt anhand des Cooldowns höchstens ein Projektil pro erlaubtem Intervall.",
+        "Abgelaufene Projektile werden pro Update entfernt.",
+        "Der Startzustand enthält ein Schiff in der Mitte und mindestens einen Asteroiden."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "starts with a ship in the center and at least one asteroid",
+        "spawns a bullet at the ship nose moving in the facing direction",
+        "removes expired bullets"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-DMG-01",
+      "title": "Asteroiden-Trefferpunkte & Schaden",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Asteroiden besitzen Trefferpunkte (HP); Projektile richten Schaden an, statt sofort zu zerstören. Erst bei HP <= 0 zerbricht/verschwindet der Asteroid.",
+      "acceptanceCriteria": [
+        "HP je Größe: groß 3, mittel 2, klein 1.",
+        "Ein Treffer zieht den Schaden des Projektils von den HP ab.",
+        "Ein einzelner Basis-Laser-Treffer (1 Schaden) zerstört einen großen Asteroiden (3 HP) nicht.",
+        "Score/Credits gibt es erst bei tatsächlicher Zerstörung.",
+        "Beschädigte Asteroiden werden visuell wärmer dargestellt (Präsentation)."
+      ],
+      "testFile": "test/asteroid.test.ts, test/world.test.ts",
+      "tests": [
+        "starts with hp based on its size (large > medium > small)",
+        "exposes maxHp equal to the starting hp",
+        "a single laser shot damages but does not destroy a large asteroid"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-ECON-01",
+      "title": "Credit-System",
+      "category": "economy",
+      "priority": "must",
+      "description": "Das Zerstören von Asteroiden bringt Credits, die später im Shop ausgegeben werden. Startwert 0.",
+      "acceptanceCriteria": [
+        "Bei Zerstörung eines Asteroiden werden Credits in Höhe des Score-Werts gutgeschrieben (klein 100 / mittel 50 / groß 20).",
+        "Credits werden nur bei tatsächlicher Zerstörung vergeben, nicht bei bloßem Schaden.",
+        "world.credits startet bei 0."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "awards credits equal to the score value when an asteroid is destroyed"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-WEAPON-01",
+      "title": "Waffensystem (Laser, Vulkan MK, Ballista)",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Mehrere Waffen mit unterschiedlichen Werten. Basis-Laser immer verfügbar; Vulkan MK und Ballista werden im Shop gekauft und nur bei Besitz ausgerüstet.",
+      "acceptanceCriteria": [
+        "Vulkan MK: sehr schnelle Feuerrate, kurze Reichweite (kurze Projektil-Lebensdauer); feuert einen einzelnen Schuss pro Auslösung, zufällig gestreut innerhalb eines ~30°-Kegels.",
+        "Ballista: langsame Feuerrate, große Reichweite, keine Streuung, hoher Einzelschaden (reißt Große in einem Schuss).",
+        "Es lassen sich nur besessene Waffen ausrüsten (equipWeapon prüft ownedWeapons).",
+        "Feuern nutzt die Werte der ausgerüsteten Waffe (Cooldown, Geschwindigkeit, Lebensdauer, Schrotanzahl, Streuung, Schaden)."
+      ],
+      "testFile": "test/weapons.test.ts, test/world.test.ts",
+      "tests": [
+        "defines the laser, Vulkan MK and Ballista",
+        "Vulkan MK: fast, short range, single shot with a wide spread cone",
+        "Ballista: slower, longer range, precise, higher damage",
+        "only equips weapons the player owns",
+        "Vulkan MK fires a single pellet per shot",
+        "Vulkan MK spreads its shots randomly within the cone"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-AMMO-01",
+      "title": "Munitionstypen (Standard, Panzerbrechend, Explosiv)",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Ladbare Munitionstypen modifizieren jeden Schuss. Standard ist unbegrenzt; Spezialmunition wird gekauft/gefunden und pro Schuss verbraucht. Pakete enthalten viel Munition (AMMO.packSize ap 60 / explosiv 50, Loot LOOT.ammoGrant 30).",
+      "acceptanceCriteria": [
+        "Panzerbrechend (AP): verdoppelt den Schaden (×2).",
+        "Explosiv: hat einen Näherungs-/Explosionsradius (AMMO.explosive.blast) — das Projektil detoniert, sobald es einem Ziel nahe kommt, und trifft alles im Blast-Radius; das erleichtert das Zielen gegenüber Direkttreffer-Munition.",
+        "Spezialmunition wird pro Schuss um 1 verringert; bei leer automatischer Rückfall auf Standard.",
+        "Beim Aufsammeln von Munitions-Loot wird, sofern noch Standard geladen ist, automatisch auf die aufgenommene Munition (ap) gewechselt; eine bereits gewählte Spezialmunition bleibt erhalten."
+      ],
+      "testFile": "test/weapons.test.ts, test/world.test.ts",
+      "tests": [
+        "standard is neutral, AP doubles damage, explosive detonates on proximity",
+        "special ammo packs are sizeable",
+        "armor-piercing ammo doubles damage and is consumed per shot",
+        "explosive ammo gives the round a proximity blast radius",
+        "detonates near a target without a direct hit and destroys it",
+        "standard rounds do NOT hit the same off-line target (control)",
+        "picking up ammo while on standard auto-switches to the new ammo",
+        "keeps an already-selected special ammo when picking up ammo",
+        "falls back to standard rounds when special ammo is empty"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-PLANET-01",
+      "title": "Driftender Shop-Planet",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Ab und zu erscheint ein Planet, der sich langsam und waagrecht durch den Bildschirm bewegt und danach wieder verschwindet. Er dient später als Landeplattform für den Shop.",
+      "acceptanceCriteria": [
+        "Beim Start ist kein Planet vorhanden.",
+        "Nach einer Verzögerung (PLANET.firstSpawn) erscheint ein Planet an einem Rand und driftet waagrecht (velocity.y == 0).",
+        "Es ist höchstens ein Planet gleichzeitig auf dem Bildschirm.",
+        "Hat der Planet den Bildschirm vollständig verlassen, wird er entfernt und nach PLANET.interval erscheint ein neuer.",
+        "Der Planet läuft NICHT am Rand um (er zieht durch und verschwindet)."
+      ],
+      "testFile": "test/planet.test.ts, test/world.test.ts",
+      "tests": [
+        "drifts horizontally with no vertical motion",
+        "is not gone while still partly on screen",
+        "is gone once fully past the right edge",
+        "is gone once fully past the left edge",
+        "has no planet at the very start",
+        "spawns a planet after the spawn delay, drifting horizontally",
+        "keeps at most one planet on screen at a time",
+        "despawns the planet after it crosses the screen"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-LAND-01",
+      "title": "Landen auf dem Planeten",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Der Spieler muss sein Schiff einige Sekunden durchgehend auf dem Planeten halten, um zu landen. Erfolgreiches Landen öffnet den Shop.",
+      "acceptanceCriteria": [
+        "Solange sich das Schiff innerhalb des Planeten-Radius befindet, füllt sich der Lande-Fortschritt (proportional zu dt).",
+        "Verlässt das Schiff den Planeten, wird der Fortschritt zurückgesetzt.",
+        "Erreicht der Fortschritt PLANET.landTime, wechselt der Zustand auf 'shop'.",
+        "Nach dem Shop kann erst wieder gelandet werden, wenn das Schiff den Planeten einmal verlassen hat (kein Sofort-Wieder-Öffnen).",
+        "Asteroiden bleiben während des Landens gefährlich."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "accumulates landing progress while the ship sits on the planet",
+        "resets progress when the ship leaves the planet",
+        "opens the shop after the required hold time, pausing the world",
+        "closeShop resumes play and blocks immediate re-landing until the ship leaves"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHOP-01",
+      "title": "Shop-Menü & Kauf",
+      "category": "economy",
+      "priority": "must",
+      "description": "Nach dem Landen öffnet ein Shop-Menü (Welt pausiert), in dem Waffen und Munition für Credits gekauft werden. Schiffe folgen im nächsten Schritt.",
+      "acceptanceCriteria": [
+        "Solange der Shop offen ist ('shop'), wird die Spielwelt nicht aktualisiert (pausiert).",
+        "Angebot: Vulkan MK, Ballista sowie Munitionspakete Panzerbrechend und Explosiv.",
+        "Ein Waffenkauf zieht die Credits ab, schaltet die Waffe frei und rüstet sie aus.",
+        "Eine bereits besessene Waffe kann nicht erneut gekauft werden (keine Doppelabbuchung).",
+        "Ein Kauf bei zu wenig Credits wird abgelehnt (keine Änderung).",
+        "Ein Munitionskauf schreibt ein Paket (packSize) gut und ist wiederholbar (stapelt)."
+      ],
+      "testFile": "test/shop.test.ts",
+      "tests": [
+        "offers the weapons, ammo packs and the ship",
+        "buys a weapon: deducts credits, adds ownership, auto-equips",
+        "refuses to buy a weapon twice",
+        "refuses when credits are insufficient",
+        "buys an ammo pack: adds rounds and deducts credits",
+        "allows buying ammo repeatedly (stacks)"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHIP-03",
+      "title": "Kaufbare Schiffe & Delta Raptor",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Mehrere Schiffe mit unterschiedlichen Flugwerten. Vanguard ist das Startschiff; der Delta Raptor ('wendiger Interceptor') wird im Shop gekauft. Das ausgerüstete Schiff bestimmt Steuerung und Grafik.",
+      "acceptanceCriteria": [
+        "Beim Start besitzt der Spieler nur den Vanguard und hat ihn ausgerüstet.",
+        "Der Delta Raptor ist wendiger als der Vanguard: schnelleres Drehen, mehr Schub, höhere Höchstgeschwindigkeit, kleinerer Rumpf (Hitbox).",
+        "Ein Schiff lässt sich nur ausrüsten, wenn es besessen wird.",
+        "Das Ausrüsten überträgt die Werte des Schiffs auf das Spielerschiff (radius, turnSpeed, thrust, maxSpeed).",
+        "Shop-Kauf: Credits abziehen, in ownedShips aufnehmen, automatisch ausrüsten; nicht doppelt kaufbar; bei zu wenig Credits abgelehnt.",
+        "Ein besessenes, aber nicht ausgerüstetes Schiff kann im Shop kostenlos gewechselt werden (Enter -> equipped, keine Credits); nur das aktive Schiff zeigt AUSGERÜSTET, die übrigen besessenen zeigen WECHSELN. Gilt analog für Waffen.",
+        "Der Renderer zeichnet das ausgerüstete Schiff (Vanguard, Delta Raptor oder Titan)."
+      ],
+      "testFile": "test/ships.test.ts, test/world.test.ts, test/shop.test.ts",
+      "tests": [
+        "Delta Raptor is more agile than the Vanguard",
+        "starts owning only the Vanguard",
+        "equips a ship only if owned",
+        "equipping a ship applies its stats to the ship",
+        "buys the Delta Raptor: deducts credits, owns and equips it",
+        "refuses to re-buy the currently equipped ship (owned, no charge)",
+        "switches to an owned but unequipped ship for free (planet swap)",
+        "switches to an owned but unequipped weapon for free",
+        "refuses the Delta Raptor when credits are insufficient"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHIP-04",
+      "title": "Titan-Schlachtschiff mit maus-gezielten Türmen",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Ein drittes, kaufbares Schiff: das Schlachtschiff 'Titan'. Träge (großer Rumpf, langsames Drehen/Beschleunigen, niedrige Höchstgeschwindigkeit), dafür mit eingebauten Schilden (mehrere Ladungen) und mehreren Geschütztürmen, die unabhängig vom Rumpf zur Maus schwenken und die ausgerüstete Waffe aus jeder Mündung feuern.",
+      "acceptanceCriteria": [
+        "Der Titan ist träger als der Vanguard (niedrigere turnSpeed/thrust/maxSpeed) und hat einen größeren Radius.",
+        "Der Titan hat eine eingebaute Schildkapazität (>0), die beim Ausrüsten geladen bereitsteht; ein Schiff-Schild wertet den Rumpf-Schild nur auf, nie ab.",
+        "Türme (ship.turrets) schwenken zum Maus-Zielpunkt (Input.aim -> ship.aimAngle); ohne Maus/Türme feuern Schiffe wie bisher entlang der Rumpfnase.",
+        "Beim Feuern gibt jeder Turm einen Schuss aus seiner Mündung entlang der Zielrichtung ab (Spezialmunition wird pro Salve einmal verbraucht).",
+        "Shop-Kauf: Credits abziehen, in ownedShips aufnehmen, automatisch ausrüsten (mit Türmen + Schild); nicht doppelt kaufbar.",
+        "Der Renderer zeichnet den Titan-Rumpf samt zur Maus schwenkender Turmläufe; das Shop-Icon ist vorhanden.",
+        "Feuer kann per Leertaste ODER linker Maustaste ausgelöst werden."
+      ],
+      "testFile": "test/ships.test.ts, test/world.test.ts, test/shop.test.ts",
+      "tests": [
+        "Titan is a slow, heavily-armored battleship with turrets and shields",
+        "equipping the Titan installs its turrets and heavy shields (charged)",
+        "fires one bolt from every turret toward the mouse aim",
+        "a single-cannon ship still fires one bolt along its nose",
+        "buys the Titan: deducts credits, owns and equips it with turrets"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHIP-05",
+      "title": "Titan-Upgrades (kaufbar, sichtbar am Schiff)",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Das Titan-Schlachtschiff kann im Shop mit einmaligen Upgrades aufgerüstet werden, die nur wirken, solange der Titan geflogen wird, und sichtbar am Rumpf erscheinen. Umgesetzt (alle 5): Schildgenerator (+Schildkapazität), Triebwerke (+Schub/Tempo/Wendigkeit), Autogeschütz (dritter, selbst zielender & feuernder Turm), Traktorstrahl (zieht kleine Asteroiden heran, zerlegt sie für Bonus-Credits, zieht Loot an), Hangar (zwei dauerhaft mitfliegende Wingman-Drohnen, die selbst feuern).",
+      "acceptanceCriteria": [
+        "Upgrades sind eine eigene Shop-Seite ('UPGRADES') und nur sichtbar, wenn der Titan besessen wird; ohne Titan zeigt die Seite einen Hinweis.",
+        "Ein gekauftes Upgrade wird in world.shipUpgrades aufgenommen (installShipUpgrade) und beim (Wieder-)Ausrüsten des Titan angewandt; nicht doppelt kaufbar.",
+        "Schildgenerator: erhöht die Schildkapazität des Titan (shieldMax) um TITAN_UPGRADE.shieldGenBonus.",
+        "Triebwerke: erhöhen thrust/maxSpeed/turnSpeed des Titan (TITAN_UPGRADE.engine*).",
+        "Autogeschütz: ein zusätzlicher Turm (ship.hasAutocannon) zielt automatisch auf das nächste Ziel in AUTOCANNON.range und feuert ohne Spielereingabe im AUTOCANNON.cooldown; hält Feuer, wenn kein Ziel in Reichweite ist.",
+        "Traktorstrahl: zieht kleine Asteroiden in TRACTOR.range zum Schiff (überschreibt deren Drift), zerlegt sie am Rumpf und zahlt dafür ein Vielfaches (TRACTOR.absorbCreditMult) ihrer normalen Credits (Wirtschafts-Upgrade); zieht außerdem nahes Loot zum Schiff.",
+        "Hangar: startet WINGMAN.count freundliche Drohnen (world.wingmen), die dauerhaft in Formation neben dem Titan fliegen (steerWingman, snappt bei Screen-Wrap). Sie greifen NUR Gegner an (nearestEnemyInRange, ignorieren Asteroiden), brechen bei einem Ziel aus der Formation aus und fliegen ein Stück auf den Gegner zu (WINGMAN.engageDist, flankierend). Sie können von Gegner-Projektilen abgeschossen werden und respawnen nach WINGMAN.respawn Sekunden (world.wingmanRespawn). Beim Verlassen des Titan werden sie entlassen.",
+        "Ein installiertes Upgrade bleibt beim Schiffwechsel erhalten und wird beim Zurückwechseln zum Titan erneut angewandt (Werte werden aus Basis + Upgrades neu berechnet, nicht kumulativ).",
+        "Installierte Upgrades werden am Titan-Rumpf gezeichnet (Schildgenerator = Kuppel am Heck, Triebwerke = leuchtende Düsen, Autogeschütz = schwenkender Turm auf dem Vorderdeck, Traktorstrahl = Emitter-Schale + violettes Zugfeld, Hangar = Startbuchten + mitfliegende Drohnen); Shop-Icons vorhanden."
+      ],
+      "testFile": "test/shop.test.ts, test/world.test.ts, test/wingman.test.ts",
+      "tests": [
+        "hides upgrades until the Titan is owned, then shows them",
+        "buying the shield generator installs it and boosts the Titan's shield capacity",
+        "buying engines makes the Titan faster and more agile",
+        "buying the autocannon fits an auto-turret to the Titan",
+        "the autocannon upgrade auto-fires at a nearby target without player input",
+        "the autocannon holds fire when no target is in range",
+        "buying the tractor beam installs it on the Titan",
+        "the tractor beam reels in a small asteroid and shatters it for bonus credits",
+        "the tractor beam pulls nearby loot toward the ship",
+        "buying the hangar installs it on the Titan",
+        "the hangar upgrade launches wingmen that fly along and auto-fire",
+        "wingmen are dismissed when leaving the Titan",
+        "wingmen ignore asteroids and only fire at enemies",
+        "a wingman shot down by an enemy bullet respawns after a delay",
+        "eases toward its formation target without teleporting",
+        "snaps into place when it falls far behind (screen wrap)",
+        "refuses to buy an already-installed upgrade",
+        "keeps the upgrade installed after switching ships and back"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-WAVE-01",
+      "title": "Wellen (fortlaufende Asteroidenwellen)",
+      "category": "gameplay",
+      "priority": "must",
+      "description": "Ist das Asteroidenfeld leergeräumt, startet nach kurzer Pause die nächste, stärkere Welle mit mehr (und schnelleren) Asteroiden.",
+      "acceptanceCriteria": [
+        "Das Spiel startet auf Welle 1 mit einem Asteroidenfeld.",
+        "Sobald alle Asteroiden zerstört sind, wird nach WAVE.delay die nächste Welle gespawnt und die Wellennummer erhöht.",
+        "Höhere Wellen haben mehr Asteroiden (und etwas schnellere).",
+        "Im Test-Modus mit fest vorgegebener Asteroidenzahl (asteroids-Option) werden KEINE Wellen automatisch nachgespawnt."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "starts on wave 1 with a field of asteroids",
+        "advances to a stronger wave once the field is cleared",
+        "does not spawn waves in fixed-asteroid test mode"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHOP-02",
+      "title": "Shop mit drei Seiten & Item-Bildern",
+      "category": "economy",
+      "priority": "should",
+      "description": "Der Shop ist in drei Seiten/Kategorien gegliedert (Munition, Waffen, Schiffe), zwischen denen umgeschaltet wird. Jeder kaufbare Gegenstand zeigt ein kleines Bild/Icon.",
+      "acceptanceCriteria": [
+        "Die Artikel sind in die Seiten 'ammo', 'weapon', 'ship' gruppiert (itemsForPage).",
+        "Zwischen den Seiten wird per Links/Rechts umgeschaltet; Auf/Ab wählt innerhalb der Seite; Enter kauft; Esc verlässt.",
+        "Jeder Gegenstand wird mit einem Icon dargestellt (Präsentation)."
+      ],
+      "testFile": "test/shop.test.ts",
+      "tests": [
+        "groups items into ammo, weapon and ship pages"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHOP-03",
+      "title": "Shop-Navigation mit WASD",
+      "category": "economy",
+      "priority": "could",
+      "description": "Zusätzlich zu den Pfeiltasten kann im Shop mit A/D durch die Seiten und mit W/S durch die Items navigiert werden.",
+      "acceptanceCriteria": [
+        "A blättert eine Seite zurück, D eine Seite weiter (wie Pfeil links/rechts).",
+        "W/S bewegen die Auswahl innerhalb der Seite (wie Pfeil hoch/runter)."
+      ],
+      "testFile": "manuell (Input) / im Browser verifiziert",
+      "tests": [],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-ENEMY-01",
+      "title": "Gegner (feindliche Jäger)",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Ab und zu erscheinen feindliche Jäger, die sich bewegen und gezielt auf den Spieler schießen. Sie haben Trefferpunkte und geben beim Abschuss Score und Credits.",
+      "acceptanceCriteria": [
+        "Im Wellen-Modus erscheinen Gegner nach einem Timer (bis zu ENEMY.maxAlive gleichzeitig); im Test-Modus (feste Asteroidenzahl) nicht automatisch.",
+        "Ein Gegner feuert im Feuer-Intervall ein Projektil in Richtung des Spielers.",
+        "Gegner-Projektile treffen das Schiff und kosten ein Leben (sofern nicht unverwundbar/geschützt).",
+        "Ein Gegner nimmt Schaden durch Spieler-Projektile; bei HP <= 0 wird er zerstört, gibt Score + Credits und hinterlässt Loot.",
+        "Gegner verschwinden nach Ablauf ihrer Lebensdauer wieder (ohne Loot)."
+      ],
+      "testFile": "test/enemy.test.ts, test/world.test.ts",
+      "tests": [
+        "moves by its velocity and wraps, counting down its life",
+        "is gone when its life runs out",
+        "spawns an enemy in wave mode when the timer elapses",
+        "does not spawn enemies in fixed-asteroid test mode",
+        "an enemy fires a projectile aimed at the ship",
+        "an enemy bullet hits the ship and costs a life",
+        "a player bullet destroys an enemy, awarding score, credits and dropping loot"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-LOOT-01",
+      "title": "Loot & Spezialausrüstung",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Zerstörte Gegner (und Bosse) hinterlassen ein Aufsammel-Objekt. Durch Drüberfliegen sammelt der Spieler es ein. Loot-Typen: Schild, Antigrav, Munition, Raketen, Minen. Drop-Gewichte (dropLoot): Schild selten (LOOT.shieldDropChance), Minen gelegentlich (mineDropChance), Raketen selten (rocketDropChance), Rest gleichmäßig auf Antigrav/Munition.",
+      "acceptanceCriteria": [
+        "Loot driftet langsam, läuft am Rand um und verschwindet nach LOOT.life.",
+        "Kollidiert das Schiff mit Loot, wird es eingesammelt und der Effekt angewandt.",
+        "Schild: füllt den aufladbaren Trefferschild; Antigrav: drückt nahe Asteroiden weg; Munition: füllt AP+Explosiv; Raketen: +ROCKET.lootGrant; Minen: +MINE.lootGrant.",
+        "Drop-Verteilung: Schild und Raketen sind selten, Minen kommen gelegentlich, Antigrav/Munition sind die häufigen Drops.",
+        "Ein aktiver Schild verhindert Lebensverlust bei Treffern."
+      ],
+      "testFile": "test/loot.test.ts, test/world.test.ts",
+      "tests": [
+        "drifts, wraps and counts down its life",
+        "is gone when its life runs out",
+        "picking up shield loot grants a temporary shield",
+        "picking up ammo loot refills ammunition",
+        "picking up rocket loot grants rockets",
+        "picking up mine loot grants mines",
+        "shield is a rare enemy drop — mid-range rolls yield other loot",
+        "an enemy can occasionally drop mines",
+        "a shield prevents losing a life",
+        "antigrav deflects a nearby asteroid away from the ship"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHOP-04",
+      "title": "Shop: Extra-Leben & zufällige Spezialausrüstung",
+      "category": "economy",
+      "priority": "should",
+      "description": "Eine neue Shop-Seite 'Ausrüstung' bietet ein Extra-Leben (immer verfügbar, bis zu einer Obergrenze) sowie Spezialausrüstung (Schild, Antigrav), die pro Shop-Besuch nur mit ~50% Wahrscheinlichkeit im Sortiment ist.",
+      "acceptanceCriteria": [
+        "Ein Extra-Leben erhöht die Leben um 1 und kostet Credits; bei Erreichen der Obergrenze (GAME.maxLives) ist es nicht kaufbar.",
+        "Schild-Kauf gewährt dem Schiff einen Schild, Antigrav-Kauf das Antigrav-Feld.",
+        "Schild und Antigrav sind zufällig (je Chance SHOP.equipmentChance) beim Öffnen des Shops im Sortiment; sonst nicht.",
+        "Beim Landen/Öffnen des Shops wird das zufällige Sortiment neu ermittelt.",
+        "Nur verfügbare Items werden angezeigt und sind kaufbar (visibleItems)."
+      ],
+      "testFile": "test/shop.test.ts, test/world.test.ts",
+      "tests": [
+        "offers weapons, ammo, ship and equipment",
+        "groups items into ammo, weapon, ship and equipment pages",
+        "extra life purchase adds a life and costs credits",
+        "refuses an extra life at the maximum",
+        "buying a shield from the shop grants a shield",
+        "visibleItems hides random equipment that is out of stock",
+        "visibleItems shows random equipment that is in stock",
+        "opening the shop rolls a fresh equipment stock (subset of random equipment)"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-INPUT-01",
+      "title": "Waffen- und Munitionswechsel per E und Q",
+      "category": "gameplay",
+      "priority": "could",
+      "description": "Zusätzlich zur direkten Auswahl (1/2/3 bzw. 4/5/6) kann mit E durch die besessenen Waffen und mit Q durch die Munitionstypen zyklisch gewechselt werden.",
+      "acceptanceCriteria": [
+        "cycleWeapon schaltet auf die nächste besessene Waffe und läuft am Ende wieder auf die erste um.",
+        "Besitzt der Spieler nur den Basis-Laser, bleibt cycleWeapon auf dem Laser.",
+        "cycleAmmo schaltet zyklisch durch Standard, Panzerbrechend und Explosiv.",
+        "E ist im Spiel auf cycleWeapon gelegt, Q auf cycleAmmo (im Shop ohne Wirkung)."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "cycleWeapon steps through the owned weapons and wraps",
+        "cycleWeapon keeps the laser when nothing else is owned",
+        "cycleAmmo steps through standard, ap and explosive and wraps"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-ROCKET-01",
+      "title": "Zielsuchende Raketen",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Raketen sind eine begrenzte Ressource (kaufbar im Shop, findbar als Loot). Sie werden mit S / Pfeil-runter abgefeuert, erfassen das nächste Ziel (Gegner oder Asteroid) vor dem Schiff und verfolgen es.",
+      "acceptanceCriteria": [
+        "Ein Raketen-Abschuss ist nur möglich, wenn Raketen vorhanden sind (rocketAmmo > 0); er verbraucht eine Rakete und unterliegt einem Cooldown.",
+        "Beim Abschuss wird das nächste Ziel innerhalb eines Kegels vor dem Schiff erfasst (Gegner oder Asteroid).",
+        "Die Rakete dreht sich pro Update mit begrenzter Drehrate in Richtung ihres Ziels.",
+        "Ist das Ziel zerstört/verschwunden, sucht die Rakete ein neues Ziel oder fliegt geradeaus weiter.",
+        "Trifft die Rakete ein Ziel, richtet sie hohen Schaden an und wird verbraucht; sie hat eine begrenzte Lebensdauer.",
+        "Raketen werden im Shop (Munition) gekauft und können als Loot aufgesammelt werden."
+      ],
+      "testFile": "test/rocket.test.ts, test/world.test.ts, test/shop.test.ts",
+      "tests": [
+        "creates a rocket with speed, life and an optional target",
+        "steers its velocity toward the target within the turn rate",
+        "moves, wraps and counts down its life",
+        "firing a rocket consumes ammo and locks the nearest target in front",
+        "does not fire a rocket without ammo",
+        "a rocket homes in on and destroys its target",
+        "picking up rocket loot grants rockets",
+        "buying rockets grants rocket ammo"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-MINE-01",
+      "title": "Weltraum-Minen (umschaltbare Zweitwaffe)",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Neben Raketen kann als Sekundärwaffe auch ein Minenwerfer geladen werden. Mit X wird zwischen Rakete und Mine umgeschaltet; beide feuern mit S / Pfeil-runter. Minen werden als kleines Minenfeld hinter dem Schiff abgelassen und detonieren bei Kontakt mit Gegnern oder Asteroiden.",
+      "acceptanceCriteria": [
+        "Es gibt eine Sekundärwaffen-Auswahl (Rakete/Mine); cycleSecondary schaltet zwischen beiden um.",
+        "S / Pfeil-runter feuert die aktive Sekundärwaffe, sofern deren Munition vorhanden ist.",
+        "Bei aktiver Mine wird pro Auslösung ein kleines Minenfeld (mehrere Minen) hinter dem Schiff abgelassen und entsprechend viel Minen-Munition verbraucht.",
+        "Minen driften leicht, laufen am Rand um und verschwinden nach einer Lebensdauer.",
+        "Eine Mine detoniert bei Kontakt mit einem Asteroiden oder Gegner, richtet hohen Schaden an und wird verbraucht; die eigene Ship wird von eigenen Minen nicht getroffen.",
+        "Minen sind im Shop (Munition) kaufbar."
+      ],
+      "testFile": "test/mine.test.ts, test/world.test.ts, test/shop.test.ts",
+      "tests": [
+        "creates a mine with a trigger radius, life and damage",
+        "drifts, wraps and counts down its life",
+        "cycleSecondary toggles between rocket and mine",
+        "dropping mines lays a field behind the ship and consumes mine ammo",
+        "does not drop mines without ammo or when rockets are selected",
+        "a mine detonates on an asteroid dealing damage",
+        "buying mines grants mine ammo"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-EQUIP-01",
+      "title": "Aufladbarer Schild (Trefferschutz)",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Der Schild macht nicht mehr komplett unverwundbar, sondern absorbiert eine begrenzte Zahl Treffer (SHIELD.capacity) und lädt nach kurzer Pause wieder auf.",
+      "acceptanceCriteria": [
+        "Solange der Schild Ladungen hat, kostet ein Treffer kein Leben, sondern verbraucht eine Ladung.",
+        "Sind alle Ladungen weg, kostet der nächste Treffer wieder ein Leben.",
+        "Nach SHIELD.rechargeDelay ohne Treffer wird eine Ladung (bis capacity) wieder aufgeladen.",
+        "Schild-Loot/-Kauf setzt Kapazität und Ladung auf SHIELD.capacity."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "a shield charge absorbs a hit instead of a life",
+        "when shield charges are gone a hit costs a life",
+        "the shield recharges a charge after the delay"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-ENEMY-02",
+      "title": "Gegnerische Raumstationen",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Ab der zweiten Welle können neben Jägern auch Raumstationen erscheinen: langsamer und sehr schwer gepanzert (viel HP), höhere Belohnung. Statt Projektilen feuern sie eine aufladende Strahlwaffe: Zielen -> telegrafiertes Aufladen (Ziel wird zu Ladebeginn fixiert) -> kurzer, tödlicher Strahl -> Abklingzeit. Der Spieler kann durch Bewegen aus der Linie ausweichen.",
+      "acceptanceCriteria": [
+        "Eine Station hat deutlich mehr HP und einen größeren Radius als ein Jäger.",
+        "Stationen feuern keine Projektile (keine enemyBullets), sondern eine Strahlwaffe.",
+        "Der Strahl durchläuft Phasen Zielen -> Laden -> Feuern -> Abklingen; nur in der Feuer-Phase verursacht er Schaden (advanceStationBeam liefert nur dann 'live').",
+        "Die Zielrichtung wird zu Beginn der Ladephase fixiert; ein bewegtes Schiff kann der Linie ausweichen.",
+        "Ein Strahltreffer auf das Schiff auf der Linie kostet ein Leben bzw. eine Schild-Ladung (respektiert Unverwundbarkeit); verlässt das Schiff die Linie, verfehlt der Strahl.",
+        "Stationen erscheinen erst ab Welle 2 (pickEnemyKind).",
+        "Beim Abschuss geben Stationen Score/Credits und lassen Loot fallen."
+      ],
+      "testFile": "test/enemy.test.ts, test/collision.test.ts, test/world.test.ts",
+      "tests": [
+        "a station has much more hp and a larger radius than a fighter",
+        "pickEnemyKind stays a fighter on wave 1 and can be a station from wave 2",
+        "charging beam cycles aim -> charge -> fire -> cooldown, live only while firing",
+        "hits when the circle overlaps the segment",
+        "misses when the circle is beside the segment",
+        "misses when the circle is past the segment end",
+        "a station's charging beam damages the ship when it is on the locked line",
+        "a station's beam misses when the ship leaves the locked line",
+        "a station fires no projectiles (it uses a charging beam instead)"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-BASE-01",
+      "title": "Gegnerische Schlachtschiffe (A/B/C)",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Statt Hex-Modul-Cluster erscheinen ab Welle 2 (BASE.chance eines Stations-Spawns) große Schlachtschiffe in drei Designs: A Dreadnought (Panzerkeil, Twin-Kanone, Schild), B Mandibel-Räuber (zwei Fangarme, rotes Kernauge, schneller Dreifach-Streuschuss, kein Schild), C Werft-Festung (klobig, Flak-Batterie + Jäger-Hangar, starker Schild). Jedes Schiff hat EINEN Lebensbalken (kein Modul-für-Modul-Zerlegen); bei hp<=0 explodiert es, gibt Score+Credits und Loot. Specs in BATTLESHIPS (constants.ts).",
+      "acceptanceCriteria": [
+        "createBattleship(design,pos,vel) erzeugt ein Schiff nach BATTLESHIPS[design] (hp/maxHp, radius, shield/shieldMax, angle=atan2(vel), fireTimer/hangarTimer).",
+        "spawnBase wählt zufällig eines der drei Designs und lässt es von einer Seite driften; ab BASE.fromWave ersetzt es mit BASE.chance einen Stations-Spawn.",
+        "hitBases prüft einen einzelnen Hüllen-Kreis (radius); Direkttreffer verbrauchen das Projektil, Explosivtreffer schädigen alle Hüllen im Radius.",
+        "isBaseDead = hp<=0; retireDeadBases vergibt BATTLESHIPS[design].score/credits, Explosion + dropLoot.",
+        "Renderer zeichnet je Design einen eigenen Rumpf mit einem Lebensbalken über dem Schiff."
+      ],
+      "testFile": "test/base.test.ts, test/world.test.ts",
+      "tests": [
+        "builds a ship from its design spec (hp, radius, shield)",
+        "faces its travel direction",
+        "drifts, wraps and counts down its life",
+        "is dead only once its health bar is empty",
+        "a player bullet damages a battleship hull",
+        "destroying a battleship removes it, awards credits and drops loot",
+        "from wave 2 a station spawn can be a battleship"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-BASE-02",
+      "title": "Schlachtschiff-Schild (blaue Rumpf-Linie)",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Manche Designs (Dreadnought shieldMax 3, Festung shieldMax 4; Mandibel 0) tragen einen aufladbaren Schild: Treffer werden absorbiert, solange Ladungen da sind, danach sinkt der Lebensbalken. Ladungen regenerieren nach BASE.shieldRechargeDelay ohne Treffer. Der Schild wird — wie beim Spielerschiff — als leuchtende BLAUE LINIE um den Rumpf gezeichnet (kein blau ausgefüllter Rumpf), plus eine dünne blaue Schild-Subleiste unter dem Lebensbalken.",
+      "acceptanceCriteria": [
+        "damageBase zieht bei shield>0 eine Ladung ab (onShieldHit, Rumpf bleibt heil) und resettet shieldRecharge; sonst sinkt hp.",
+        "updateBase regeneriert eine Ladung, wenn shield<shieldMax und shieldRecharge abgelaufen ist.",
+        "Der Mandibel-Räuber hat shieldMax 0 und nimmt sofort Rumpfschaden.",
+        "Renderer zeichnet den Schild als cyan Rumpf-Kontur (hull outline skaliert 1.16, Helligkeit nach Ladungen; bei 0 gestrichelt/aufladend), NICHT als Vollfüllung."
+      ],
+      "testFile": "test/base.test.ts, test/world.test.ts",
+      "tests": [
+        "absorbs hits until the shield is down, then the hull takes damage",
+        "an unshielded raider takes hull damage from the first hits",
+        "regenerates a spent shield charge after the recharge delay",
+        "the mandible raider carries no shield"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-BASE-03",
+      "title": "Schlachtschiff-Waffen (feuern auf den Spieler)",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Jedes Schlachtschiff feuert auf eigenem fireCooldown eine Salve auf den Spieler (world.enemyBullets), sofern in Reichweite (range). Dreadnought/Festung = zwei parallele Bolzen (muzzleGap), Mandibel = Dreifach-Streufächer (spread). Bolzen sind normale enemyBullets (treffen Schiff + Wingmen).",
+      "acceptanceCriteria": [
+        "updateBaseWeapons zählt fireTimer herunter und ruft bei <=0 fireBattleshipGun (nur in Reichweite).",
+        "fireBattleshipGun erzeugt spec.pellets Bolzen: Streufächer bei spread>0, sonst parallele Mündungen um muzzleGap versetzt.",
+        "Bolzen zielen auf die aktuelle Schiffsposition und landen in world.enemyBullets."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "a battleship fires enemy bullets at the ship over time"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-BASE-04",
+      "title": "Werft-Festung: Jäger-Hangar",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Die Werft-Festung (Design C) startet zusätzlich auf hangarCooldown Jäger (createEnemy 'fighter') Richtung Schiff in world.enemies, begrenzt durch hangarMaxFighters gegen Spam. Andere Designs haben keinen Hangar.",
+      "acceptanceCriteria": [
+        "updateBaseWeapons startet für Festungen bei hangarTimer<=0 einen Jäger Richtung Schiff, sofern world.enemies.length < hangarMaxFighters.",
+        "Ist der Cap erreicht, wird kein weiterer Jäger gestartet.",
+        "Dreadnought/Mandibel (hangar=false) starten nichts."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "a fortress launches fighters over time",
+        "a fortress stops launching at the fighter cap"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-BOSS-01",
+      "title": "Boss-Asteroiden",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Alle WAVE.bossEvery Wellen erscheint ein Boss-Asteroid: sehr groß und zäh. Zerstört zerfällt er in mehrere große Asteroiden, gibt viel Score/Credits und hinterlässt Loot.",
+      "acceptanceCriteria": [
+        "Der Boss hat einen großen Radius und viele HP.",
+        "Beim Zerstören zerfällt er in mehrere (mehr als 2) große Asteroiden.",
+        "Ein zerstörter Boss gibt seinen (hohen) Score/Credits und lässt Loot fallen."
+      ],
+      "testFile": "test/asteroid.test.ts, test/world.test.ts",
+      "tests": [
+        "a boss asteroid has high hp and a large radius",
+        "a boss splits into several large asteroids",
+        "destroying a boss awards its score and drops loot"
+      ],
+      "status": "passing"
+    }
+  ]
+}
