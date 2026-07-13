@@ -11,7 +11,7 @@ import {
   isOwned,
   isEquipped,
 } from "../src/game/shop.ts";
-import { WEAPONS, AMMO, SHIPS, GAME, EQUIPMENT, ROCKET, MINE } from "../src/game/constants.ts";
+import { WEAPONS, AMMO, SHIPS, GAME, EQUIPMENT, ROCKET, MINE, SHIELD } from "../src/game/constants.ts";
 
 const item = (id: string) => {
   const found = SHOP_ITEMS.find((i) => i.id === id);
@@ -323,17 +323,36 @@ describe("equipment purchases", () => {
     expect(w.credits).toBe(5000 - EQUIPMENT.shield.price);
   });
 
-  it("shows an installed shield as owned and refuses a second purchase", () => {
+  it("levels the shield up with repeated purchases, then refuses at max", () => {
     const w = newWorld();
-    w.credits = 5000;
+    w.credits = 100000;
     const shield = item("equip-shield");
     expect(isOwned(w, shield)).toBe(false); // nothing fitted yet
-    purchase(w, shield);
+    expect(purchase(w, shield)).toBe("ok"); // level 1
+    expect(w.ship.shieldLevel).toBe(1);
     expect(w.ship.shieldMax).toBeGreaterThan(0);
-    expect(isOwned(w, shield)).toBe(true); // now displayed as "AUSGERÜSTET"
+    expect(isOwned(w, shield)).toBe(false); // not maxed -> still buyable
+    expect(purchase(w, shield)).toBe("ok"); // level 2
+    expect(purchase(w, shield)).toBe("ok"); // level 3 (max)
+    expect(w.ship.shieldLevel).toBe(SHIELD.maxLevel);
+    expect(isOwned(w, shield)).toBe(true); // now maxed
     const credits = w.credits;
-    expect(purchase(w, shield)).toBe("owned"); // not charged again
+    expect(purchase(w, shield)).toBe("owned"); // no further purchase
     expect(w.credits).toBe(credits);
+  });
+
+  it("each shield level shortens the recharge delay", () => {
+    const w = newWorld();
+    w.credits = 100000;
+    const shield = item("equip-shield");
+    purchase(w, shield);
+    const d1 = w.ship.shieldRecharge; // recharge set to the level-1 delay on grant
+    purchase(w, shield);
+    const d2 = w.ship.shieldRecharge;
+    purchase(w, shield);
+    const d3 = w.ship.shieldRecharge;
+    expect(d2).toBeLessThan(d1);
+    expect(d3).toBeLessThan(d2);
   });
 
   it("keeps repeatable equipment (extra life, antigrav) un-owned", () => {

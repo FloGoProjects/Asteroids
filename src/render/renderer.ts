@@ -11,7 +11,7 @@ import { SiegeMissile } from "../game/siege.ts";
 import { Wingman } from "../game/wingman.ts";
 import { Base } from "../game/base.ts";
 import { visiblePages, visibleItems, lockedItems, isOwned, isEquipped, ShopItem } from "../game/shop.ts";
-import { WEAPONS, AMMO, PLANET, LOOT, GAME, STATION, SHIPS, AUTOCANNON, TRACTOR, WINGMAN, ShipId, LootKind } from "../game/constants.ts";
+import { WEAPONS, AMMO, PLANET, LOOT, GAME, SHIELD, STATION, SHIPS, AUTOCANNON, TRACTOR, WINGMAN, ShipId, LootKind } from "../game/constants.ts";
 import { fromAngle, add, vec, distance, Vec } from "../engine/vector2.ts";
 import { Particles } from "./particles.ts";
 
@@ -1963,9 +1963,10 @@ export class Renderer {
     }
     if (world.ship.shieldMax > 0) {
       const pips = "●".repeat(world.ship.shield) + "○".repeat(world.ship.shieldMax - world.ship.shield);
+      const lvl = world.ship.shieldLevel > 0 ? ` L${world.ship.shieldLevel}` : "";
       ctx.fillStyle = "#57e5ff";
       ctx.shadowColor = "#57e5ff";
-      ctx.fillText(`SCHILD  ${pips}`, 24, by);
+      ctx.fillText(`SCHILD${lvl}  ${pips}`, 24, by);
       by += 20;
     }
     if (world.ship.antigrav > 0) {
@@ -2129,6 +2130,12 @@ export class Renderer {
           ctx.fillText(`Bestand: ${stock}`, px + panelW - 30, y + rowH / 2 + 16);
         } else if (item.id === "extra-life") {
           ctx.fillText(`Leben: ${world.lives}/${GAME.maxLives}`, px + panelW - 30, y + rowH / 2 + 16);
+        } else if (item.ref === "shield") {
+          ctx.fillText(
+            `Level: ${world.ship.shieldLevel}/${SHIELD.maxLevel}`,
+            px + panelW - 30,
+            y + rowH / 2 + 16,
+          );
         }
       }
     });

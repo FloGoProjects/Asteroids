@@ -1010,17 +1010,30 @@ describe("enemy battleships", () => {
     expect(w.loot.length).toBe(1); // wreck drop
   });
 
-  it("from wave 2 a station spawn can be a battleship", () => {
+  it("from wave 3 (BASE.fromWave) a station spawn can be a battleship", () => {
     const w = createWorld({ width: 900, height: 700, seed: 1 });
     w.ship.invuln = 999;
     w.wave = BASE.fromWave;
     w.enemies = [];
     w.bases = [];
     w.enemyTimer = 0.01;
-    // 0.1 -> station (below stationChance) AND battleship (below BASE.chance)
+    // 0.1 -> station (below stationChance) AND battleship (below the wave-3 base chance)
     w.rng = { next: () => 0.1, range: (min, max) => min + (max - min) * 0.1 };
     updateWorld(w, IDLE, 0.02);
     expect(w.bases.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("does not spawn battleships before BASE.fromWave (a station spawns instead)", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1 });
+    w.ship.invuln = 999;
+    w.wave = BASE.fromWave - 1; // one wave too early
+    w.enemies = [];
+    w.bases = [];
+    w.enemyTimer = 0.01;
+    w.rng = { next: () => 0.1, range: (min, max) => min + (max - min) * 0.1 };
+    updateWorld(w, IDLE, 0.02);
+    expect(w.bases.length).toBe(0);
+    expect(w.enemies.length).toBeGreaterThanOrEqual(1);
   });
 });
 

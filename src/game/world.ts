@@ -1,7 +1,7 @@
 /** Authoritative game state and update loop. REQ-WORLD-01 (+ collisions). */
 import { Vec, vec, add, sub, scale, normalize, fromAngle, rotate, distance } from "../engine/vector2.ts";
 import { createRng, Rng } from "../engine/random.ts";
-import { Ship, ShipInput, createShip, updateShip, grantShield } from "./ship.ts";
+import { Ship, ShipInput, createShip, updateShip, grantShield, shieldRechargeDelay } from "./ship.ts";
 import { Bullet, createBullet, updateBullet, isExpired } from "./bullet.ts";
 import { Asteroid, createAsteroid, updateAsteroid, splitAsteroid } from "./asteroid.ts";
 import { Planet, PlanetKind, createPlanet, updatePlanet, isPlanetGone } from "./planet.ts";
@@ -434,7 +434,7 @@ function shipVulnerable(world: World): boolean {
 function damageShip(world: World): void {
   if (world.ship.shield > 0) {
     world.ship.shield -= 1;
-    world.ship.shieldRecharge = SHIELD.rechargeDelay;
+    world.ship.shieldRecharge = shieldRechargeDelay(world.ship);
     world.ship.invuln = SHIELD.hitGrace; // brief grace so one overlap can't drain it all
     world.shake = Math.max(world.shake, 0.4);
     world.onShieldHit?.(world.ship.position);
@@ -473,11 +473,27 @@ function spawnBase(world: World): void {
 }
 
 // --- Enemies (REQ-ENEMY-01, REQ-ENEMY-02) ------------------------------
+/** Chance a station spawn becomes a battleship: small at fromWave, growing with the wave. REQ-BASE-01. */
+function baseChanceForWave(wave: number): number {
+  if (wave < BASE.fromWave) return 0;
+  return Math.min(BASE.maxChance, BASE.chance + (wave - BASE.fromWave) * BASE.chancePerWave);
+}
+
+/** How many battleships may be on the field at once — few early, more in later waves. */
+function baseCapForWave(wave: number): number {
+  return Math.min(3, 1 + Math.floor((wave - BASE.fromWave) / 2));
+}
+
 function spawnEnemy(world: World): void {
   const rng = world.rng;
   const kind = pickEnemyKind(world.wave, rng.next());
-  // From wave BASE.fromWave, some station spawns are multi-hex bases instead. REQ-BASE-01.
-  if (kind === "station" && world.wave >= BASE.fromWave && rng.next() < BASE.chance) {
+  // From wave BASE.fromWave, some station spawns become battleships — rare early, more later. REQ-BASE-01.
+  if (
+    kind === "station" &&
+    world.wave >= BASE.fromWave &&
+    world.bases.length < baseCapForWave(world.wave) &&
+    rng.next() < baseChanceForWave(world.wave)
+  ) {
     spawnBase(world);
     return;
   }
@@ -905,14 +921,14 @@ export function equipShip(world: World, id: ShipId): void {
     if (world.shipUpgrades.includes("shieldGen")) cap += TITAN_UPGRADE.shieldGenBonus;
     world.ship.shieldMax = cap;
     world.ship.shield = cap;
-    world.ship.shieldRecharge = SHIELD.rechargeDelay;
+    world.ship.shieldRecharge = shieldRechargeDelay(world.ship);
   } else {
     // other ships: built-in shields only ever upgrade the hull's shield, never downgrade it
     const cap = spec.shieldCapacity ?? 0;
     if (cap > world.ship.shieldMax) {
       world.ship.shieldMax = cap;
       world.ship.shield = cap;
-      world.ship.shieldRecharge = SHIELD.rechargeDelay;
+      world.ship.shieldRecharge = shieldRechargeDelay(world.ship);
     }
   }
 }

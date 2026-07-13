@@ -121,8 +121,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     name: "Schild",
     price: EQUIPMENT.shield.price,
     ref: "shield",
-    desc: `Absorbiert ${SHIELD.capacity} Treffer, lädt nach`,
-    random: SHOP.randomEquipment.includes("equip-shield"),
+    desc: `Trefferschild · je Level schnellere Regeneration (max ${SHIELD.maxLevel})`,
     unlockWave: 3, // strong defensive item — held back until wave 3. REQ-SHOP-05
   },
   {
@@ -200,7 +199,8 @@ export function isOwned(world: World, item: ShopItem): boolean {
   if (item.kind === "weapon") return world.ownedWeapons.includes(item.ref as WeaponId);
   if (item.kind === "ship") return world.ownedShips.includes(item.ref as ShipId);
   if (item.kind === "upgrade") return world.shipUpgrades.includes(item.ref as UpgradeId);
-  if (item.kind === "equipment" && item.ref === "shield") return world.ship.shieldMax > 0;
+  // The shield is a levelling subsystem: "owned" (no longer buyable) only once maxed out. REQ-EQUIP-01.
+  if (item.kind === "equipment" && item.ref === "shield") return world.ship.shieldLevel >= SHIELD.maxLevel;
   return false;
 }
 
@@ -209,7 +209,8 @@ export function isEquipped(world: World, item: ShopItem): boolean {
   if (item.kind === "weapon") return world.weapon === item.ref;
   if (item.kind === "ship") return world.shipId === item.ref;
   if (item.kind === "upgrade") return world.shipUpgrades.includes(item.ref as UpgradeId);
-  if (item.kind === "equipment" && item.ref === "shield") return world.ship.shieldMax > 0;
+  // Show the shield as "equipped" only at max level; below that it still displays a price to level up.
+  if (item.kind === "equipment" && item.ref === "shield") return world.ship.shieldLevel >= SHIELD.maxLevel;
   return false;
 }
 

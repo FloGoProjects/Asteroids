@@ -285,7 +285,7 @@ export const EQUIPMENT = {
 
 export const SHOP = {
   equipmentChance: 0.5, // chance each random equipment item is stocked per visit
-  randomEquipment: ["equip-shield", "equip-antigrav"] as string[], // stocked randomly
+  randomEquipment: ["equip-antigrav"] as string[], // stocked randomly (shield is now a reliable buy)
 };
 
 // --- Enemies ------------------------------------------------------------
@@ -358,8 +358,10 @@ export interface BattleshipSpec {
 }
 
 export const BASE = {
-  fromWave: 2, // battleships appear from this wave on
-  chance: 0.5, // chance a station spawn is a battleship instead
+  fromWave: 3, // battleships appear from this wave on (later than before)
+  chance: 0.2, // starting chance a station spawn is a battleship (only a few early on)
+  chancePerWave: 0.12, // that chance grows by this much per wave beyond fromWave
+  maxChance: 0.6, // cap on the battleship spawn chance
   life: 30, // seconds before it leaves the field
   shieldRechargeDelay: 5, // seconds without a hit to regain one shield charge
 };
@@ -490,9 +492,13 @@ export const LOOT = {
 };
 
 // Rechargeable hit-shield (special equipment). REQ-EQUIP-01.
+// The shield levels up (1..maxLevel) by buying/looting more shields; higher levels
+// regenerate faster. Level 0 = no bought shield (e.g. the Titan's built-in shield).
 export const SHIELD = {
-  capacity: 1, // hits absorbed before it breaks (weaker)
-  rechargeDelay: 6, // seconds without a hit to regain the charge (slower)
+  capacity: 1, // hits absorbed before it breaks
+  rechargeDelay: 12, // base recharge seconds (level 0 / built-in shields) — deliberately slow
+  rechargeByLevel: [12, 8, 5] as number[], // recharge seconds at shield level 1 / 2 / 3
+  maxLevel: 3, // shields stack up to this level to shorten the recharge
   hitGrace: 0.6, // brief invuln after a shield absorbs a hit
 };
 

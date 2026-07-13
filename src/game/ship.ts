@@ -27,6 +27,7 @@ export interface Ship {
   invuln: number; // seconds of remaining invulnerability
   shield: number; // current shield charges (0 = down)
   shieldMax: number; // shield capacity (0 = no shield equipment)
+  shieldLevel: number; // bought/looted shield tier 0..SHIELD.maxLevel (higher = faster recharge)
   shieldRecharge: number; // seconds until the next charge regenerates
   antigrav: number; // seconds of remaining antigrav field
   aimAngle: number; // direction the guns point (mouse aim for turret ships, else = angle)
@@ -52,6 +53,7 @@ export function createShip(position: Vec, shipId: ShipId = "vanguard"): Ship {
     invuln: 0,
     shield: shieldCapacity, // built-in shields (if any) come charged
     shieldMax: shieldCapacity,
+    shieldLevel: 0, // no bought shield yet (built-in shields recharge at the base rate)
     shieldRecharge: 0,
     antigrav: 0,
     aimAngle: -Math.PI / 2,
@@ -62,11 +64,22 @@ export function createShip(position: Vec, shipId: ShipId = "vanguard"): Ship {
   };
 }
 
-/** Fit/refresh the rechargeable hit-shield to full capacity. REQ-EQUIP-01. */
+/** Recharge delay for a ship's current shield tier (faster at higher levels). REQ-EQUIP-01. */
+export function shieldRechargeDelay(ship: Ship): number {
+  const lvl = ship.shieldLevel;
+  return lvl > 0 ? SHIELD.rechargeByLevel[lvl - 1] : SHIELD.rechargeDelay;
+}
+
+/**
+ * Fit or level up the rechargeable hit-shield and refresh it to full. REQ-EQUIP-01.
+ * Each grant raises the shield level (up to SHIELD.maxLevel), which shortens the recharge.
+ * Never downgrades an existing (e.g. Titan-built-in) larger capacity.
+ */
 export function grantShield(ship: Ship): void {
-  ship.shieldMax = SHIELD.capacity;
-  ship.shield = SHIELD.capacity;
-  ship.shieldRecharge = SHIELD.rechargeDelay;
+  ship.shieldLevel = Math.min(SHIELD.maxLevel, ship.shieldLevel + 1);
+  ship.shieldMax = Math.max(ship.shieldMax, SHIELD.capacity);
+  ship.shield = ship.shieldMax; // comes fully charged
+  ship.shieldRecharge = shieldRechargeDelay(ship);
 }
 
 export function updateShip(ship: Ship, input: ShipInput, dt: number, world: WorldBounds): void {
@@ -97,7 +110,7 @@ export function updateShip(ship: Ship, input: ShipInput, dt: number, world: Worl
     ship.shieldRecharge -= dt;
     if (ship.shieldRecharge <= 0) {
       ship.shield += 1;
-      ship.shieldRecharge = SHIELD.rechargeDelay;
+      ship.shieldRecharge = shieldRechargeDelay(ship);
     }
   }
 }
