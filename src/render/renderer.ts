@@ -11,7 +11,7 @@ import { SiegeMissile } from "../game/siege.ts";
 import { Wingman } from "../game/wingman.ts";
 import { Base } from "../game/base.ts";
 import { visiblePages, visibleItems, lockedItems, isOwned, isEquipped, ShopItem } from "../game/shop.ts";
-import { WEAPONS, AMMO, PLANET, LOOT, GAME, SHIELD, STATION, SHIPS, AUTOCANNON, TRACTOR, WINGMAN, ShipId, LootKind } from "../game/constants.ts";
+import { WEAPONS, AMMO, PLANET, LOOT, GAME, SHIELD, STATION, SHIPS, AUTOCANNON, TRACTOR, DEFLECTOR, WINGMAN, ShipId, LootKind } from "../game/constants.ts";
 import { fromAngle, add, vec, distance, Vec } from "../engine/vector2.ts";
 import { Particles } from "./particles.ts";
 
@@ -132,6 +132,8 @@ export class Renderer {
         world.ship.autoAimAngle,
       );
       if (world.ship.antigrav > 0) this.drawAntigravField(ctx, world.ship.position, this.t);
+      if (world.ship.deflectorFlash > 0)
+        this.drawDeflectorPulse(ctx, world.ship.position, world.ship.deflectorFlash);
       if (world.ship.shieldMax > 0)
         this.drawShieldBubble(
           ctx,
@@ -1807,29 +1809,44 @@ export class Renderer {
       }
       ctx.restore();
     }
-    if (upgrades.includes("shieldGen")) {
-      // glowing shield-generator dome on the aft deck
+    if (upgrades.includes("deflector")) {
+      // deflector emitter coil on the aft deck (the pulse ring is drawn in world space)
       ctx.save();
       ctx.translate(-7, 0);
-      const dome = ctx.createRadialGradient(0, -1, 1, 0, 0, 6);
-      dome.addColorStop(0, "rgba(200,255,250,0.95)");
-      dome.addColorStop(1, "rgba(87,229,255,0.35)");
-      ctx.fillStyle = dome;
-      ctx.strokeStyle = "#57e5ff";
+      ctx.strokeStyle = "#7fd8ff";
       ctx.shadowColor = "#57e5ff";
-      ctx.shadowBlur = 10;
-      ctx.lineWidth = 1.2;
+      ctx.shadowBlur = 8;
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.arc(0, 0, 5, 0, Math.PI * 2);
-      ctx.fill();
       ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "#eaffff";
       ctx.beginPath();
-      ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(0, 0, 2.4, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.restore();
     }
+  }
+
+  /** Expanding shockwave ring for a deflector pulse. REQ-SHIP-05. */
+  private drawDeflectorPulse(ctx: CanvasRenderingContext2D, pos: Vec, flash: number): void {
+    const progress = 1 - flash / DEFLECTOR.flashTime; // 0 -> 1 as the ring expands
+    const radius = progress * DEFLECTOR.radius;
+    const alpha = flash / DEFLECTOR.flashTime; // fade out as it grows
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = `rgba(127,216,255,${0.5 * alpha})`;
+    ctx.shadowColor = "#57e5ff";
+    ctx.shadowBlur = 16;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(220,245,255,${0.35 * alpha})`;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius * 0.82, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawVignette(ctx: CanvasRenderingContext2D): void {
@@ -2390,24 +2407,22 @@ export class Renderer {
         ctx.arc(p[0], p[1], 2.2, 0, Math.PI * 2);
         ctx.fill();
       }
-    } else if (item.id === "upgrade-shieldGen") {
-      // shield-generator dome emitting an arc
+    } else if (item.id === "upgrade-deflector") {
+      // deflector pulse: a small emitter with concentric shockwave rings
       ctx.strokeStyle = "#57e5ff";
-      ctx.fillStyle = "rgba(87,229,255,0.28)";
       ctx.shadowColor = "#57e5ff";
       ctx.shadowBlur = 8;
       ctx.lineWidth = 2;
+      for (const rr of [6, 11, 16]) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#eaffff";
       ctx.beginPath();
-      ctx.arc(cx, cy + 5, 8, Math.PI, 0); // dome
-      ctx.lineTo(cx + 8, cy + 7);
-      ctx.lineTo(cx - 8, cy + 7);
-      ctx.closePath();
+      ctx.arc(cx, cy, 2.4, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
-      // radiating shield arc above
-      ctx.beginPath();
-      ctx.arc(cx, cy + 4, 13, Math.PI * 1.15, Math.PI * 1.85);
-      ctx.stroke();
     } else if (item.id === "upgrade-engines") {
       // twin exhaust nozzles with a blue flame
       ctx.fillStyle = "#3a4552";

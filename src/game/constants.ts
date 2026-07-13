@@ -74,7 +74,7 @@ export const SHIPS: Record<ShipId, ShipSpec> = {
 
 // --- Titan ship upgrades (bought at the shop, shown on the hull) --------
 // Each upgrade is a one-time purchase that only applies while the Titan is flown.
-export type UpgradeId = "shieldGen" | "engines" | "autocannon" | "tractor" | "hangar";
+export type UpgradeId = "deflector" | "engines" | "autocannon" | "tractor" | "hangar";
 
 export interface UpgradeSpec {
   id: UpgradeId;
@@ -84,11 +84,11 @@ export interface UpgradeSpec {
 }
 
 export const UPGRADES: Record<UpgradeId, UpgradeSpec> = {
-  shieldGen: {
-    id: "shieldGen",
-    name: "Schildgenerator",
+  deflector: {
+    id: "deflector",
+    name: "Deflektor-Puls",
     price: 1800,
-    desc: "+3 Schildladungen · Kuppel am Heck",
+    desc: "Schockwelle vernichtet nahe Gegner-Geschosse & stößt Gegner zurück",
   },
   engines: {
     id: "engines",
@@ -118,7 +118,7 @@ export const UPGRADES: Record<UpgradeId, UpgradeSpec> = {
 
 /** Display/cycle order of upgrades in the shop. */
 export const UPGRADE_ORDER: UpgradeId[] = [
-  "shieldGen",
+  "deflector",
   "engines",
   "autocannon",
   "tractor",
@@ -127,10 +127,18 @@ export const UPGRADE_ORDER: UpgradeId[] = [
 
 /** Tuning for how each upgrade changes the Titan. */
 export const TITAN_UPGRADE = {
-  shieldGenBonus: 3, // extra shield charges from the shield generator
   engineThrust: 120, // extra thrust (px/s^2) from upgraded engines
   engineMaxSpeed: 120, // extra top speed (px/s)
   engineTurn: 0.9, // extra turn rate (rad/s)
+};
+
+/** Deflector-pulse upgrade: a periodic shockwave that clears nearby enemy fire. REQ-SHIP-05. */
+export const DEFLECTOR = {
+  interval: 4.0, // seconds between pulses
+  radius: 210, // shockwave reach (px): enemy bullets inside are vaporised
+  flashTime: 0.4, // seconds the expanding ring is drawn (render)
+  enemyDamage: 1, // damage dealt to enemies caught in the pulse
+  knockback: 260, // outward velocity (px/s) added to enemies caught in the pulse
 };
 
 /** Auto-aiming turret added by the autocannon upgrade. REQ-SHIP-05. */

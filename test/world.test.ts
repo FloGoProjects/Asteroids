@@ -943,6 +943,36 @@ describe("Titan battleship", () => {
     expect(d1).toBeLessThan(d0); // pulled inward
   });
 
+  it("the deflector pulse vaporises nearby enemy bullets", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ownedShips.push("titan");
+    w.shipUpgrades.push("deflector");
+    equipShip(w, "titan");
+    w.ship.invuln = 999;
+    w.ship.deflectorCooldown = 0; // fire on the next tick
+    w.enemyBullets.push(createBullet({ ...w.ship.position }, vec(0, 0), 5, 4, 1));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.enemyBullets.length).toBe(0); // cleared by the pulse
+    expect(w.ship.deflectorCooldown).toBeGreaterThan(0); // pulse fired -> on cooldown
+  });
+
+  it("the deflector pulse damages and pushes a nearby enemy", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ownedShips.push("titan");
+    w.shipUpgrades.push("deflector");
+    equipShip(w, "titan");
+    w.ship.invuln = 999;
+    w.ship.deflectorCooldown = 0;
+    const e = createEnemy(vec(w.ship.position.x + 60, w.ship.position.y), vec(0, 0), "fighter");
+    e.fireTimer = 999;
+    const hp0 = e.hp;
+    w.enemies.push(e);
+    updateWorld(w, IDLE, 1 / 120);
+    const survivor = w.enemies[0];
+    expect(survivor.hp).toBeLessThan(hp0); // took pulse damage
+    expect(survivor.velocity.x).toBeGreaterThan(0); // knocked outward (+x)
+  });
+
   it("the hangar upgrade launches wingmen that fly along and auto-fire", () => {
     const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
     w.ownedShips.push("titan");

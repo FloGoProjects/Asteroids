@@ -53,6 +53,7 @@ import {
   AMMO_ORDER,
   SHIPS,
   TITAN_UPGRADE,
+  DEFLECTOR,
   AUTOCANNON,
   TRACTOR,
   WINGMAN,
@@ -917,8 +918,7 @@ export function equipShip(world: World, id: ShipId): void {
       world.ship.turnSpeed += TITAN_UPGRADE.engineTurn;
     }
     // the Titan's shield is its own subsystem — set it authoritatively (comes charged)
-    let cap = spec.shieldCapacity ?? 0;
-    if (world.shipUpgrades.includes("shieldGen")) cap += TITAN_UPGRADE.shieldGenBonus;
+    const cap = Math.max(spec.shieldCapacity ?? 0, world.ship.shieldMax);
     world.ship.shieldMax = cap;
     world.ship.shield = cap;
     world.ship.shieldRecharge = shieldRechargeDelay(world.ship);
@@ -1061,6 +1061,39 @@ function updateTractor(world: World, dt: number): void {
   }
 }
 
+/** Deflector-pulse upgrade: periodic shockwave that vaporises nearby enemy fire + repels enemies. REQ-SHIP-05. */
+function updateDeflector(world: World, dt: number): void {
+  const ship = world.ship;
+  const active = world.shipId === "titan" && world.shipUpgrades.includes("deflector");
+  if (!active) {
+    ship.deflectorFlash = 0;
+    return;
+  }
+  if (ship.deflectorFlash > 0) ship.deflectorFlash = Math.max(0, ship.deflectorFlash - dt);
+  ship.deflectorCooldown -= dt;
+  if (ship.deflectorCooldown > 0) return;
+  ship.deflectorCooldown = DEFLECTOR.interval;
+  ship.deflectorFlash = DEFLECTOR.flashTime;
+
+  // vaporise incoming enemy bullets within the shockwave
+  if (world.enemyBullets.length) {
+    world.enemyBullets = world.enemyBullets.filter(
+      (b) => distance(b.position, ship.position) > DEFLECTOR.radius,
+    );
+  }
+  // push back and lightly damage enemies caught in the pulse
+  const dead = new Set<Enemy>();
+  for (const e of world.enemies) {
+    const d = distance(e.position, ship.position);
+    if (d > DEFLECTOR.radius) continue;
+    const dir = d > 0.001 ? normalize(sub(e.position, ship.position)) : vec(1, 0);
+    e.velocity = add(e.velocity, scale(dir, DEFLECTOR.knockback));
+    hitEnemy(world, e, DEFLECTOR.enemyDamage, dead);
+  }
+  if (dead.size) world.enemies = world.enemies.filter((e) => !dead.has(e));
+  world.shake = Math.max(world.shake, 0.25);
+}
+
 /** Hangar upgrade: keep friendly wingmen in formation and let them auto-fire. REQ-SHIP-05. */
 /** Nearest hostile enemy within `range` of `from` (wingmen ignore asteroids). REQ-SHIP-05. */
 function nearestEnemyInRange(world: World, from: Vec, range: number): Enemy | null {
@@ -1181,6 +1214,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
 
   // Hangar wingmen fly in formation and auto-fire (REQ-SHIP-05)
   updateWingmen(world, dt);
+
+  // Deflector pulse clears nearby enemy fire on a timer (REQ-SHIP-05)
+  updateDeflector(world, dt);
 
   // Bullets: move, wrap, expire (REQ-BULLET-02)
   for (const b of world.bullets) updateBullet(b, dt, world);

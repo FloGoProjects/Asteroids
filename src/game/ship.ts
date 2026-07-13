@@ -36,6 +36,8 @@ export interface Ship {
   autoAimAngle: number; // direction the autocannon points (toward its target)
   autoCooldown: number; // seconds until the autocannon can fire again
   tractorCooldown: number; // seconds until the tractor beam can grab the next asteroid
+  deflectorCooldown: number; // seconds until the next deflector pulse (deflector upgrade)
+  deflectorFlash: number; // seconds left of the deflector pulse ring animation (render)
 }
 
 export function createShip(position: Vec, shipId: ShipId = "vanguard"): Ship {
@@ -63,6 +65,8 @@ export function createShip(position: Vec, shipId: ShipId = "vanguard"): Ship {
     autoAimAngle: -Math.PI / 2,
     autoCooldown: 0,
     tractorCooldown: 0,
+    deflectorCooldown: 0,
+    deflectorFlash: 0,
   };
 }
 

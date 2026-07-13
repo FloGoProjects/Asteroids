@@ -36,9 +36,9 @@ describe("shop catalog", () => {
       "ship-deltaRaptor",
       "ship-titan",
       "upgrade-autocannon",
+      "upgrade-deflector",
       "upgrade-engines",
       "upgrade-hangar",
-      "upgrade-shieldGen",
       "upgrade-tractor",
       "vulkan",
     ]);
@@ -58,7 +58,7 @@ describe("shop pages", () => {
     expect(itemsForPage("weapon").map((i) => i.id)).toEqual(["vulkan", "ballista"]);
     expect(itemsForPage("ship").map((i) => i.id)).toEqual(["ship-deltaRaptor", "ship-titan"]);
     expect(itemsForPage("upgrade").map((i) => i.id)).toEqual([
-      "upgrade-shieldGen",
+      "upgrade-deflector",
       "upgrade-engines",
       "upgrade-autocannon",
       "upgrade-tractor",
@@ -369,7 +369,7 @@ describe("Titan upgrades", () => {
     expect(visibleItems(w, "upgrade").map((i) => i.id)).toEqual([]);
     w.ownedShips.push("titan");
     expect(visibleItems(w, "upgrade").map((i) => i.id)).toEqual([
-      "upgrade-shieldGen",
+      "upgrade-deflector",
       "upgrade-engines",
       "upgrade-autocannon",
       "upgrade-tractor",
@@ -377,16 +377,14 @@ describe("Titan upgrades", () => {
     ]);
   });
 
-  it("buying the shield generator installs it and boosts the Titan's shield capacity", () => {
+  it("buying the deflector pulse installs it on the Titan", () => {
     const w = newWorld();
     w.credits = 20000;
     purchase(w, item("ship-titan")); // own + equip the Titan
-    const baseCap = w.ship.shieldMax;
-    const r = purchase(w, item("upgrade-shieldGen"));
+    const r = purchase(w, item("upgrade-deflector"));
     expect(r).toBe("ok");
-    expect(w.shipUpgrades).toContain("shieldGen");
-    expect(w.ship.shieldMax).toBeGreaterThan(baseCap); // capacity increased
-    expect(isOwned(w, item("upgrade-shieldGen"))).toBe(true);
+    expect(w.shipUpgrades).toContain("deflector");
+    expect(isOwned(w, item("upgrade-deflector"))).toBe(true);
   });
 
   it("buying engines makes the Titan faster and more agile", () => {
@@ -435,9 +433,9 @@ describe("Titan upgrades", () => {
     const w = newWorld();
     w.credits = 20000;
     purchase(w, item("ship-titan"));
-    purchase(w, item("upgrade-shieldGen"));
+    purchase(w, item("upgrade-deflector"));
     const credits = w.credits;
-    const r = purchase(w, item("upgrade-shieldGen"));
+    const r = purchase(w, item("upgrade-deflector"));
     expect(r).toBe("owned");
     expect(w.credits).toBe(credits);
   });
@@ -446,13 +444,12 @@ describe("Titan upgrades", () => {
     const w = newWorld();
     w.credits = 20000;
     purchase(w, item("ship-titan"));
-    purchase(w, item("upgrade-shieldGen"));
-    const boosted = w.ship.shieldMax;
+    purchase(w, item("upgrade-deflector"));
     // buy + switch to another ship, then switch back to the Titan
     purchase(w, item("ship-deltaRaptor"));
     purchase(w, item("ship-titan"));
     expect(w.shipId).toBe("titan");
-    expect(w.ship.shieldMax).toBe(boosted); // upgrade re-applied
+    expect(w.shipUpgrades).toContain("deflector"); // upgrade persists across ship swaps
   });
 });
 
