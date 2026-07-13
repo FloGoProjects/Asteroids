@@ -911,6 +911,24 @@ describe("Titan battleship", () => {
     expect(w.credits).toBe(creditsBefore + ASTEROID.sizes.small.credits * TRACTOR.absorbCreditMult);
   });
 
+  it("shatters only one small asteroid at a time, then waits out a cooldown", () => {
+    const w = createWorld({ width: 1200, height: 1200, seed: 1, asteroids: 0 });
+    w.ownedShips.push("titan");
+    w.shipUpgrades.push("tractor");
+    equipShip(w, "titan");
+    w.ship.invuln = 999;
+    // two small asteroids both already within grab range on opposite sides
+    const near = w.ship.radius + ASTEROID.sizes.small.radius + 2;
+    w.asteroids.push(createAsteroid(vec(w.ship.position.x + near, w.ship.position.y), vec(0, 0), "small"));
+    w.asteroids.push(createAsteroid(vec(w.ship.position.x - near, w.ship.position.y), vec(0, 0), "small"));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.asteroids.length).toBe(1); // only one shattered this tick
+    expect(w.ship.tractorCooldown).toBeGreaterThan(0); // reload before the next
+    // ride out the cooldown -> the second one gets absorbed too
+    for (let i = 0; i < Math.ceil(TRACTOR.cooldown * 120) + 5; i++) updateWorld(w, IDLE, 1 / 120);
+    expect(w.asteroids.length).toBe(0);
+  });
+
   it("the tractor beam pulls nearby loot toward the ship", () => {
     const w = createWorld({ width: 1200, height: 1200, seed: 1, asteroids: 0 });
     w.ownedShips.push("titan");

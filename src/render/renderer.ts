@@ -917,24 +917,32 @@ export class Renderer {
   }
 
   private drawBullet(ctx: CanvasRenderingContext2D, b: Bullet): void {
-    // Colour by loaded ammo: explosive = orange with a proximity aura, AP = hot magenta, standard = amber.
+    // Colour by loaded ammo: explosive = orange shell, AP = hot magenta, standard = amber.
     const explosive = b.blast > 0;
     const ap = !explosive && b.damage >= 2;
     const color = explosive ? "#ff7a2e" : ap ? "#ff4d6d" : COLORS.bullet;
-    const r = explosive ? 4 : Math.max(2.4, b.radius * 1.4);
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     if (explosive) {
-      // faint aura showing the proximity/blast reach
-      ctx.globalAlpha = 0.12;
+      // A small armed shell in flight (orange body + hot core). It only "blooms" into a
+      // blast animation once it detonates near the target (see onExplosion at detonation).
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(b.position.x, b.position.y, b.blast, 0, Math.PI * 2);
+      ctx.arc(b.position.x, b.position.y, 3.2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#ffe6a0";
+      ctx.beginPath();
+      ctx.arc(b.position.x, b.position.y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
     }
+    const r = Math.max(2.4, b.radius * 1.4);
     ctx.shadowColor = color;
-    ctx.shadowBlur = explosive ? 20 : 12;
+    ctx.shadowBlur = 12;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(b.position.x, b.position.y, r, 0, Math.PI * 2);

@@ -1017,38 +1017,47 @@ function updateAutocannon(world: World, dt: number): void {
   }
 }
 
-/** Tractor upgrade: reel small asteroids in, shatter them for bonus credits, and pull loot. REQ-SHIP-05. */
-function updateTractor(world: World): void {
+/**
+ * Tractor upgrade: reel in ONE small asteroid at a time (the nearest), shatter it for bonus
+ * credits, then pause for TRACTOR.cooldown before grabbing the next. Also pulls nearby loot. REQ-SHIP-05.
+ */
+function updateTractor(world: World, dt: number): void {
   if (world.shipId !== "titan" || !world.shipUpgrades.includes("tractor")) return;
   const ship = world.ship;
+  if (ship.tractorCooldown > 0) ship.tractorCooldown = Math.max(0, ship.tractorCooldown - dt);
 
-  // Reel in nearby small asteroids; shatter (absorb) the ones that reach the hull.
-  const absorbed = new Set<Asteroid>();
-  for (const a of world.asteroids) {
-    if (a.size !== "small") continue; // only small chunks
-    const d = distance(a.position, ship.position);
-    if (d > TRACTOR.range) continue;
-    if (d <= ship.radius + a.radius + TRACTOR.grabMargin) {
-      absorbed.add(a);
-    } else {
-      a.velocity = scale(normalize(sub(ship.position, a.position)), TRACTOR.pullSpeed); // override drift
-    }
-  }
-  if (absorbed.size) {
-    for (const a of absorbed) {
-      const spec = ASTEROID.sizes[a.size];
-      world.score += spec.score;
-      world.credits += spec.credits * TRACTOR.absorbCreditMult; // lucrative mining
-      world.onExplosion?.(a.position, false);
-    }
-    world.asteroids = world.asteroids.filter((a) => !absorbed.has(a));
-  }
-
-  // Pull nearby loot toward the ship (existing fly-over pickup then collects it).
+  // Pull nearby loot toward the ship regardless of the asteroid cooldown (fly-over pickup collects it).
   for (const l of world.loot) {
     if (distance(l.position, ship.position) <= TRACTOR.range) {
       l.velocity = scale(normalize(sub(ship.position, l.position)), TRACTOR.lootPullSpeed);
     }
+  }
+
+  if (ship.tractorCooldown > 0) return; // still reloading — don't reel in the next chunk yet
+
+  // Target only the single nearest small asteroid in range.
+  let target: Asteroid | null = null;
+  let bestD = TRACTOR.range;
+  for (const a of world.asteroids) {
+    if (a.size !== "small") continue; // only small chunks
+    const d = distance(a.position, ship.position);
+    if (d < bestD) {
+      bestD = d;
+      target = a;
+    }
+  }
+  if (!target) return;
+
+  if (bestD <= ship.radius + target.radius + TRACTOR.grabMargin) {
+    // shatter (absorb) it and start the reload cooldown before the next one
+    const spec = ASTEROID.sizes[target.size];
+    world.score += spec.score;
+    world.credits += spec.credits * TRACTOR.absorbCreditMult; // lucrative mining
+    world.onExplosion?.(target.position, false);
+    world.asteroids = world.asteroids.filter((a) => a !== target);
+    ship.tractorCooldown = TRACTOR.cooldown;
+  } else {
+    target.velocity = scale(normalize(sub(ship.position, target.position)), TRACTOR.pullSpeed); // reel it in
   }
 }
 
@@ -1190,7 +1199,7 @@ export function updateWorld(world: World, input: Input, dt: number): void {
   applyAntigrav(world, dt);
 
   // Tractor upgrade reels in small asteroids + loot before they move (REQ-SHIP-05)
-  updateTractor(world);
+  updateTractor(world, dt);
 
   // Asteroids (REQ-AST-01)
   for (const a of world.asteroids) updateAsteroid(a, dt, world);

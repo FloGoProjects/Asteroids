@@ -170,6 +170,7 @@ export const TRACTOR = {
   lootPullSpeed: 340, // px/s pull speed for loot (a bit faster)
   grabMargin: 12, // shatter once within (ship.radius + asteroid.radius + this)
   absorbCreditMult: 5, // absorbed asteroids pay this multiple of their normal credits (economy upgrade)
+  cooldown: 0.7, // seconds to "reload" after shattering one before reeling in the next
 };
 
 export const BULLET = {

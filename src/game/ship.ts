@@ -35,6 +35,7 @@ export interface Ship {
   hasAutocannon: boolean; // auto-aiming turret from the autocannon upgrade
   autoAimAngle: number; // direction the autocannon points (toward its target)
   autoCooldown: number; // seconds until the autocannon can fire again
+  tractorCooldown: number; // seconds until the tractor beam can grab the next asteroid
 }
 
 export function createShip(position: Vec, shipId: ShipId = "vanguard"): Ship {
@@ -61,6 +62,7 @@ export function createShip(position: Vec, shipId: ShipId = "vanguard"): Ship {
     hasAutocannon: false,
     autoAimAngle: -Math.PI / 2,
     autoCooldown: 0,
+    tractorCooldown: 0,
   };
 }
 
