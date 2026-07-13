@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Lokale, persönliche Claude-Code-Einstellungen (nicht teilen)
+.claude/settings.local.json
