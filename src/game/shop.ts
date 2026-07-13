@@ -123,6 +123,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     ref: "shield",
     desc: `Absorbiert ${SHIELD.capacity} Treffer, lädt nach`,
     random: SHOP.randomEquipment.includes("equip-shield"),
+    unlockWave: 3, // strong defensive item — held back until wave 3. REQ-SHOP-05
   },
   {
     id: "equip-antigrav",
@@ -149,6 +150,11 @@ export const SHOP_ITEMS: ShopItem[] = [
 /** Shop pages in display order: Munition, Waffen, Schiffe, Upgrades, Ausrüstung. REQ-SHOP-02/04/05. */
 export const SHOP_PAGES: ShopItemKind[] = ["ammo", "weapon", "ship", "upgrade", "equipment"];
 
+/** Pages actually shown this visit: the Upgrades tab only exists at a shipyard planet. REQ-WERFT-01. */
+export function visiblePages(world: World): ShopItemKind[] {
+  return SHOP_PAGES.filter((k) => k !== "upgrade" || world.atShipyard);
+}
+
 /** Items belonging to a given page/category, in catalog order. */
 export function itemsForPage(kind: ShopItemKind): ShopItem[] {
   return SHOP_ITEMS.filter((i) => i.kind === kind);
@@ -166,14 +172,21 @@ export function visibleItems(world: World, kind: ShopItemKind): ShopItem[] {
   });
 }
 
-/** Wave-locked items on a page, shown greyed as "coming soon" teasers. REQ-SHOP-05. */
+/**
+ * The single next unlock on a page, shown greyed as a "coming soon" teaser. REQ-SHOP-05.
+ * Only the item(s) unlocking on the nearest future wave are returned, so the shop isn't
+ * cluttered with everything that is still far off.
+ */
 export function lockedItems(world: World, kind: ShopItemKind): ShopItem[] {
-  return itemsForPage(kind).filter((i) => {
+  const locked = itemsForPage(kind).filter((i) => {
     if ((i.unlockWave ?? 1) <= world.wave) return false; // already unlocked
     if (i.kind === "upgrade") return false; // upgrades are Titan-/shipyard-gated, not wave-gated
     if (i.random && !world.shopStock.includes(i.id)) return false; // don't tease out-of-stock random gear
     return true;
   });
+  if (locked.length === 0) return [];
+  const nextWave = Math.min(...locked.map((i) => i.unlockWave ?? 1));
+  return locked.filter((i) => (i.unlockWave ?? 1) === nextWave); // just the next unlock
 }
 
 export type PurchaseResult = "ok" | "equipped" | "insufficient" | "owned" | "max";

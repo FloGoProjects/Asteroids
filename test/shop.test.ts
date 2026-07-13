@@ -3,8 +3,10 @@ import { createWorld } from "../src/game/world.ts";
 import {
   SHOP_ITEMS,
   SHOP_PAGES,
+  visiblePages,
   itemsForPage,
   visibleItems,
+  lockedItems,
   purchase,
   isOwned,
   isEquipped,
@@ -105,6 +107,27 @@ describe("progressive unlock by wave", () => {
     expect(visibleItems(w, "ship").map((i) => i.id)).not.toContain("ship-deltaRaptor");
     w.wave = 3;
     expect(visibleItems(w, "ship").map((i) => i.id)).toContain("ship-deltaRaptor");
+  });
+});
+
+// REQ-WERFT-01 / REQ-SHOP-05: page + teaser trimming
+describe("shop page visibility", () => {
+  it("hides the Upgrades tab unless at a shipyard planet", () => {
+    const w = newWorld();
+    w.atShipyard = false;
+    expect(visiblePages(w)).toEqual(["ammo", "weapon", "ship", "equipment"]);
+    w.atShipyard = true;
+    expect(visiblePages(w)).toEqual(["ammo", "weapon", "ship", "upgrade", "equipment"]);
+  });
+
+  it("teases only the next unlock on a page, not everything still locked", () => {
+    const w = newWorld(); // wave 1
+    // ammo: ap is unlocked; explosive (2) is next; rocket (3) / mine (4) stay hidden
+    expect(lockedItems(w, "ammo").map((i) => i.id)).toEqual(["ammo-explosive"]);
+    w.wave = 2;
+    expect(lockedItems(w, "ammo").map((i) => i.id)).toEqual(["ammo-rocket"]);
+    w.wave = 4;
+    expect(lockedItems(w, "ammo")).toEqual([]); // nothing left to tease
   });
 });
 
@@ -421,9 +444,16 @@ describe("random equipment stock", () => {
     expect(visibleItems(w, "equipment").map((i) => i.id)).toEqual(["extra-life"]);
   });
 
-  it("visibleItems shows random equipment that is in stock", () => {
+  it("visibleItems shows random equipment that is in stock (from its unlock wave)", () => {
     const w = newWorld();
+    w.wave = 3; // the shield unlocks at wave 3. REQ-SHOP-05
     w.shopStock = ["equip-shield"];
     expect(visibleItems(w, "equipment").map((i) => i.id)).toEqual(["extra-life", "equip-shield"]);
+  });
+
+  it("keeps the shield hidden before wave 3 even when in stock", () => {
+    const w = newWorld(); // wave 1
+    w.shopStock = ["equip-shield"];
+    expect(visibleItems(w, "equipment").map((i) => i.id)).toEqual(["extra-life"]);
   });
 });

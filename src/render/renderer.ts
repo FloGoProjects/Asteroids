@@ -10,7 +10,7 @@ import { Mine } from "../game/mine.ts";
 import { SiegeMissile } from "../game/siege.ts";
 import { Wingman } from "../game/wingman.ts";
 import { Base } from "../game/base.ts";
-import { SHOP_PAGES, visibleItems, lockedItems, isOwned, isEquipped, ShopItem } from "../game/shop.ts";
+import { visiblePages, visibleItems, lockedItems, isOwned, isEquipped, ShopItem } from "../game/shop.ts";
 import { WEAPONS, AMMO, PLANET, LOOT, GAME, STATION, SHIPS, AUTOCANNON, TRACTOR, WINGMAN, ShipId, LootKind } from "../game/constants.ts";
 import { fromAngle, add, vec, distance, Vec } from "../engine/vector2.ts";
 import { Particles } from "./particles.ts";
@@ -1988,7 +1988,8 @@ export class Renderer {
       upgrade: "UPGRADES",
       equipment: "AUSRÜSTUNG",
     };
-    const activeKind = SHOP_PAGES[world.shopPage];
+    const pages = visiblePages(world); // Upgrades tab only appears at a shipyard. REQ-WERFT-01
+    const activeKind = pages[world.shopPage];
     const items = visibleItems(world, activeKind);
     const locked = lockedItems(world, activeKind); // greyed teasers below the buyable rows
 
@@ -2028,8 +2029,8 @@ export class Renderer {
 
     // tabs (Munition / Waffen / Schiffe)
     const tabY = py + headerH;
-    const tabW = (panelW - 44) / SHOP_PAGES.length;
-    SHOP_PAGES.forEach((kind, i) => {
+    const tabW = (panelW - 44) / pages.length;
+    pages.forEach((kind, i) => {
       const tx = px + 22 + i * tabW;
       const active = i === world.shopPage;
       if (active) {

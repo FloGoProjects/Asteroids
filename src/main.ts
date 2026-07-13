@@ -15,7 +15,7 @@ import { Renderer } from "./render/renderer.ts";
 import { Particles } from "./render/particles.ts";
 import { fromAngle, add } from "./engine/vector2.ts";
 import { AMMO } from "./game/constants.ts";
-import { SHOP_PAGES, visibleItems, purchase } from "./game/shop.ts";
+import { visiblePages, visibleItems, purchase } from "./game/shop.ts";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -67,12 +67,13 @@ window.addEventListener("resize", resize);
 window.addEventListener("keydown", (e) => {
   // Shop menu navigation (world is paused). Arrows or WASD.
   if (world.state === "shop") {
-    const pageItems = visibleItems(world, SHOP_PAGES[world.shopPage]);
+    const pages = visiblePages(world);
+    const pageItems = visibleItems(world, pages[world.shopPage]);
     if (e.code === "ArrowLeft" || e.code === "KeyA") {
-      world.shopPage = (world.shopPage - 1 + SHOP_PAGES.length) % SHOP_PAGES.length;
+      world.shopPage = (world.shopPage - 1 + pages.length) % pages.length;
       world.shopIndex = 0;
     } else if (e.code === "ArrowRight" || e.code === "KeyD") {
-      world.shopPage = (world.shopPage + 1) % SHOP_PAGES.length;
+      world.shopPage = (world.shopPage + 1) % pages.length;
       world.shopIndex = 0;
     } else if (e.code === "ArrowUp" || e.code === "KeyW") {
       if (pageItems.length) world.shopIndex = (world.shopIndex - 1 + pageItems.length) % pageItems.length;
