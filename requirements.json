@@ -45,7 +45,8 @@
     "v1.14": "Titan-Rebalance + Upgrade-System (REQ-SHIP-05, Etappe 1+2). Nerf: shieldCapacity 3->1, 3->2 Türme, deutlich langsamer (turnSpeed 2.4->1.6, thrust 220->140, maxSpeed 300->200). Upgrade-Fundament: constants UpgradeId/UPGRADES/UPGRADE_ORDER/TITAN_UPGRADE; world.shipUpgrades + installShipUpgrade; equipShip berechnet Titan-Werte aus Basis+Upgrades (idempotent). Erstes Upgrade Schildgenerator (+3 Schild). Shop: neue Seite 'UPGRADES' (SHOP_PAGES erweitert), nur mit Titan sichtbar (sonst Hinweis), kind 'upgrade'. Renderer: Schildkuppel am Heck bei installiertem Upgrade (drawShip bekommt upgrades-Param), Shop-Icon, Tab-Label, Leerseiten-Hinweis; main.ts Nav-Guard gegen leere Seite. GEPLANT (nächste Etappen): Triebwerke, Autogeschütz, Traktorstrahl, Hangar; danach modulare Gegner-Basen (mehrere 6-Ecke: Schildgen/Hangar/Plasmaflak).",
     "v1.13.1": "Bugfix Schiffwechsel im Shop: der Shop unterschied nicht zwischen 'besessen' und 'ausgerüstet' -> jedes besessene Schiff zeigte AUSGERÜSTET und purchase gab 'owned' zurück, ein Wechsel war unmöglich. Neu isEquipped() (shop.ts); purchase re-equippt ein besessenes, nicht aktives Schiff/Waffe kostenlos (Result 'equipped'), nur das aktive zeigt AUSGERÜSTET, die übrigen 'WECHSELN'. Renderer nutzt isEquipped statt isOwned für das Label + WECHSELN-Zeile. Verifiziert per Unit-Tests + Offscreen-fillText-Spy (AUSGERÜSTET beim aktiven, WECHSELN beim anderen Schiff).",
     "v1.13": "Drittes Schiff 'Titan' (Schlachtschiff) mit maus-gezielten Türmen (REQ-SHIP-04). Neuer ShipSpec-Felder shieldCapacity + turrets (TurretMount[]). Träge Flugwerte, 3 Ladungen eingebaute Schilde, 3 Türme. Maus-Eingabe: keyboard.ts trackt Zeiger als Input.aim + linke Maustaste feuert (kombiniert mit Leertaste). world.ts: aimAngle aus Input.aim, fireWeapon feuert aus jeder Turmmündung entlang aimAngle (Ammo einmal pro Salve), equipShip überträgt Türme + stuft Schild monoton hoch. Renderer: drawTitanBody (Rumpf + zur Maus schwenkende Läufe), Shop-Icon, drawShip bekommt aimAngle. Shop-Item ship-titan (6500 CR). Verifiziert: 5 neue Unit-Tests + sichtbarkeits-unabhängige Offscreen-Pixelchecks (Turm-Mündung folgt Zielpunkt, Schiff/Icon rendern). HINWEIS: kein Live-Screenshot möglich (Browser-Pane hidden -> rAF pausiert).",
-    "future": "Weitere Ideen: mehr Schiffe/Waffen/Gegnertypen, Highscore/Persistenz (localStorage), Soundeffekte/Musik. OFFEN (Nutzerwunsch, in Diskussion): mehr Event-Typen (z.B. 'Schütze den Konvoi') + überarbeitetes Belohnungssystem.",
+    "future": "Weitere Ideen: mehr Schiffe/Waffen/Gegnertypen, Highscore/Persistenz (localStorage), Soundeffekte/Musik. IN ARBEIT (Nutzerwunsch): Belohnungs-Kisten (REQ-REWARD-01, fertig) als Fundament; als nächstes zwei neue Events — Kopfgeld-Elite und Konvoi-Eskorte — die Kisten als Belohnung droppen.",
+    "v1.25": "Belohnungssystem: Belohnungs-Kisten 1-von-3 (REQ-REWARD-01). Neue Entität crate.ts; REWARD-Konstanten + RewardKind. world: GameState 'reward', RewardOption, world.crates/rewardChoices/rewardIndex; spawnCrate bei Boss-/Schlachtschiff-Tod; updateCrates (Drift/Despawn/Einsammeln), openReward/rollRewardChoices (RNG-Shuffle, 3 verschiedene)/applyReward/chooseReward. Renderer drawCrate (Geschenk-Box) + drawReward (3-Karten-Overlay). main.ts Reward-Navigation (←/→, 1-3, ENTER). Tests 227->232. tsc strict grün, offscreen verifiziert (Kiste + Overlay 3 Karten).",
     "v1.24": "Kampf-Erweiterungen (Nutzer-Feedback). (A) DEFLECTOR.interval 4->6s. (B) REQ-WERFT-02 Jäger-Raketen: nach werftDone spawnt updateHunters homing-Raketen (SiegeMissile.homing/speed/life, HUNTER-Konstanten), die das Schiff verfolgen und beschleunigen, das Schiff schädigen und per interceptSiege abfangbar sind (HUNTER.score/credits). (C) Raketen & Wingman greifen Schlachtschiffe an: acquireTarget/isTargetAlive schließen world.bases ein; nearestEnemyInRange -> nearestThreatInRange (enemies+bases) in updateWingmen. (D) Hangar dreistufig: world.hangarLevel 1..3 (WINGMAN.count->maxLevel, 3. Formations-Offset); installShipUpgrade/isOwned/isEquipped für hangar level-basiert; updateWingmen nutzt hangarLevel als Drohnenzahl, Flanken zentriert; Shop-Zeile + HUD zeigen Level. Tests 221->227 (rocket-homes-battleship, wingmen-engage-battleships, hangar-level-count, 3x hunter). tsc strict grün.",
     "v1.23": "Titan-Upgrade 'Schildgenerator' -> 'Deflektor-Puls' umgebaut (Nutzer-Feedback: shieldGen war seit dem Schild-Level-System redundant). UpgradeId shieldGen->deflector; UPGRADES/UPGRADE_ORDER/Shop-Item upgrade-deflector; TITAN_UPGRADE.shieldGenBonus entfernt; neue Konstante DEFLECTOR (interval 4s, radius 210, knockback 260, enemyDamage 1, flashTime 0.4). ship.deflectorCooldown/deflectorFlash. world.updateDeflector: periodischer Puls vernichtet enemyBullets im Radius + stoesst/schaedigt Gegner (hitEnemy). equipShip setzt Titan-Schild nicht mehr per shieldGen hoch (nur noch max(built-in, aktueller shieldMax)). renderer: Heck-Emitter-Coil statt Kuppel, drawDeflectorPulse (expandierender Ring, in render() bei deflectorFlash>0), Shop-Icon = konzentrische Ringe. Tests 219->221 (shop: 'buying the deflector pulse installs it', vier shieldGen-Bloecke umgestellt; world: 'vaporises nearby enemy bullets', 'damages and pushes a nearby enemy'). tsc strict gruen, offscreen verifiziert (Puls-Ring Annulus-Helligkeit +221k, Shop-Name 'Deflektor-Puls').",
     "v1.22": "Politur nach Nutzer-Feedback. (1) Explosivmunition fliegt als kleines Geschoss (renderer.ts drawBullet: 42px-Aura entfernt, jetzt kleiner Schell mit Orange-Körper + heißem Kern); die 'Explosion' passiert erst bei Detonation über das bereits vorhandene onExplosion(false)-Partikelburst. (2) Traktorstrahl fasst nicht mehr alle kleinen Asteroiden gleichzeitig an: updateTractor(world,dt) zieht nur den nächsten heran, zerlegt ihn und pausiert TRACTOR.cooldown (0.7s, ship.tractorCooldown) vor dem nächsten; Loot-Zug unverändert. Tests 218->219 (neuer world.test 'shatters only one small asteroid at a time'). tsc strict grün.",
@@ -60,8 +61,8 @@
   "testStatus": {
     "lastRun": "2026-07-13",
     "summary": "alle Tests grün (216/216); TypeScript strict typecheck ohne Fehler. NEU v1.20 (Nutzerwunsch): (A) Progressiver Shop-Unlock (REQ-SHOP-05) — Items schalten nach Welle frei (unlockWave), gesperrt wird nur das NÄCHSTE Unlock je Seite als ausgegrauter '🔒 ab Welle N'-Teaser angezeigt (kein Zumüllen); Schild erst ab Welle 3. (B) Titan-Werft-Verteidigung (REQ-WERFT-01) — ab Welle 5 einmaliges Sonder-Level: Shipyard-Planet driftet in die Mitte, wird von langsamen Belagerungsraketen (neue Entität siege.ts) beschossen; abfangen mit Projektilen; Werft-Schadensbalken, bei 0 scheitert das Event (kommt neu), sonst gewonnen -> Titan an der Werft kaufbar. Danach ~1/3 der Planeten sind Werften; Titan + Upgrades NUR dort (shipyardOnly/atShipyard-Gating); der UPGRADES-Tab (visiblePages) erscheint nur an Werft-Planeten. Verifiziert per Unit-Tests (werft.test 10, shop.test-Gruppen) + Offscreen-Render (Werft-Ring/HUD, Tab-Spy: normal 4 Tabs, Werft 5 Tabs).",
-    "total": 227,
-    "passed": 227,
+    "total": 232,
+    "passed": 232,
     "failed": 0,
     "typecheck": "pass",
     "command": "npm test"
@@ -1001,6 +1002,30 @@
         "spawns homing hunter missiles after the shipyard-defense is won",
         "a hunter missile accelerates while chasing an invulnerable ship",
         "a hunter missile that reaches a vulnerable ship costs a life"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-REWARD-01",
+      "title": "Belohnungs-Kisten (1 von 3)",
+      "category": "economy",
+      "priority": "should",
+      "description": "Große Abschüsse (Boss-Asteroiden, Schlachtschiffe) und Events lassen eine Belohnungs-Kiste (src/game/crate.ts) fallen. Fliegt der Spieler sie ab, pausiert das Spiel (state 'reward') und er wählt 1 von REWARD.choices (3) Belohnungen aus einem gewürfelten Pool (Credits/Munition/Raketen/Minen/Schild/Extra-Leben). Roguelite-Pacing ohne Persistenz/Backend.",
+      "acceptanceCriteria": [
+        "Crate ist eine Entität wie Loot (Drift, Despawn nach REWARD.crateLife); createCrate/updateCrate/isCrateGone.",
+        "Boss-Asteroiden droppen mit REWARD.bossChance, Schlachtschiffe mit REWARD.battleshipChance eine Kiste (spawnCrate in hitAsteroid/retireDeadBases).",
+        "updateCrates sammelt eine berührte Kiste ein und öffnet den Chooser (openReward -> state 'reward', rollRewardChoices füllt 3 verschiedene Optionen).",
+        "rollRewardChoices liefert REWARD.choices verschiedene Optionen (Extra-Leben nur wenn lives < GAME.maxLives); Auswahl per RNG-Shuffle.",
+        "applyReward wendet die gewählte Option an (credits/ammoAP/ammoExpl/rockets/mines/shield/life); chooseReward(index) wendet an und setzt state zurück auf 'playing'.",
+        "updateWorld pausiert bei state 'reward' (wie shop); Renderer zeichnet Kisten im Feld (drawCrate) und das Auswahl-Overlay (drawReward, 3 Karten); main.ts navigiert (←/→, 1-3, ENTER)."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "rolls REWARD.choices distinct reward options",
+        "applyReward grants credits, rockets and a life",
+        "collecting a crate opens the reward chooser and pauses the world",
+        "chooseReward applies the pick and resumes play",
+        "a boss asteroid drops a reward crate"
       ],
       "status": "passing"
     }

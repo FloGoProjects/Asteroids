@@ -5,6 +5,7 @@ import { Bullet } from "../game/bullet.ts";
 import { Planet } from "../game/planet.ts";
 import { Enemy } from "../game/enemy.ts";
 import { Loot } from "../game/loot.ts";
+import { Crate } from "../game/crate.ts";
 import { Rocket } from "../game/rocket.ts";
 import { Mine } from "../game/mine.ts";
 import { SiegeMissile } from "../game/siege.ts";
@@ -86,6 +87,8 @@ export class Renderer {
 
     // Loot pickups (sit under the action)
     for (const l of world.loot) this.drawLoot(ctx, l);
+    // Reward crates
+    for (const c of world.crates) this.drawCrate(ctx, c);
 
     // Asteroids
     for (const a of world.asteroids)
@@ -155,6 +158,7 @@ export class Renderer {
     if (world.state === "playing" && world.waveBanner > 0) this.drawWaveBanner(ctx, world);
     if (world.state === "playing" && world.werft) this.drawWerftHud(ctx, world);
     if (world.state === "shop") this.drawShop(ctx, world);
+    if (world.state === "reward") this.drawReward(ctx, world);
     if (world.state === "gameover") this.drawGameOver(ctx, world);
     if (world.state === "paused") this.drawPause(ctx);
   }
@@ -2631,6 +2635,87 @@ export class Renderer {
     ctx.restore();
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
+  }
+
+  /** Reward crate on the field: a glowing gift box. REQ-REWARD-01. */
+  private drawCrate(ctx: CanvasRenderingContext2D, c: Crate): void {
+    const s = c.radius;
+    ctx.save();
+    ctx.translate(c.position.x, c.position.y);
+    const pulse = 0.5 + 0.5 * Math.sin(this.t * 4);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = `rgba(255,209,102,${0.14 + pulse * 0.16})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 1.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.rotate(Math.sin(c.spin * 0.8) * 0.15);
+    ctx.fillStyle = "#caa23a";
+    ctx.strokeStyle = "#ffe6a0";
+    ctx.lineWidth = 2;
+    ctx.shadowColor = "#ffd166";
+    ctx.shadowBlur = 12;
+    this.roundRect(ctx, -s, -s, s * 2, s * 2, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#fff2c8";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -s);
+    ctx.lineTo(0, s);
+    ctx.moveTo(-s, 0);
+    ctx.lineTo(s, 0);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** "Pick 1 of 3" reward chooser overlay (world paused). REQ-REWARD-01. */
+  private drawReward(ctx: CanvasRenderingContext2D, world: World): void {
+    ctx.save();
+    ctx.fillStyle = "rgba(4,5,10,0.82)";
+    ctx.fillRect(0, 0, this.w, this.h);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffd166";
+    ctx.shadowColor = "#ffd166";
+    ctx.shadowBlur = 14;
+    ctx.font = "800 30px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillText("◈ BELOHNUNG WÄHLEN", this.w / 2, this.h / 2 - 150);
+    ctx.shadowBlur = 0;
+
+    const opts = world.rewardChoices;
+    const n = Math.max(opts.length, 1);
+    const cardW = Math.min(220, (this.w - 80) / n - 24);
+    const cardH = 150;
+    const gap = 24;
+    const totalW = n * cardW + (n - 1) * gap;
+    const startX = this.w / 2 - totalW / 2;
+    const cy = this.h / 2;
+    opts.forEach((o, i) => {
+      const x = startX + i * (cardW + gap);
+      const sel = i === world.rewardIndex;
+      ctx.fillStyle = sel ? "rgba(255,209,102,0.14)" : "rgba(12,16,24,0.95)";
+      ctx.strokeStyle = sel ? "#ffd166" : "rgba(127,231,217,0.3)";
+      ctx.lineWidth = sel ? 2.5 : 1.5;
+      this.roundRect(ctx, x, cy - cardH / 2, cardW, cardH, 12);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "rgba(127,231,217,0.7)";
+      ctx.font = "700 14px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText(`[${i + 1}]`, x + cardW / 2, cy - cardH / 2 + 24);
+      ctx.fillStyle = sel ? "#ffffff" : "#cfd8e4";
+      ctx.font = "700 20px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText(o.label, x + cardW / 2, cy - 6);
+      ctx.fillStyle = "#7f8ea3";
+      ctx.font = "500 13px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText(o.desc, x + cardW / 2, cy + 22);
+    });
+
+    ctx.fillStyle = "rgba(207,216,228,0.65)";
+    ctx.font = "600 14px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillText("← →  Wählen     1–3  Direkt     ENTER  Bestätigen", this.w / 2, cy + cardH / 2 + 40);
+    ctx.restore();
   }
 
   private drawGameOver(ctx: CanvasRenderingContext2D, world: World): void {

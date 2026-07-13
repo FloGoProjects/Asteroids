@@ -30,7 +30,8 @@ git push                    # löst Deploy automatisch aus
 ## Datei-Landkarte
 - `src/main.ts` — Einstiegspunkt, Game-Loop
 - `src/engine/` — reine Utilities: `vector2` (Mathe), `wrap` (Bildschirmrand), `random` (deterministischer RNG)
-- `src/game/` — Spiellogik: `world` (Zustand), `ship`/`wingman`, `asteroid`, `bullet`/`rocket`/`mine`/`siege` (Belagerungsrakete), `enemy`, `collision`, `loot`, `shop`, `base`, `planet` (normal/shipyard), `constants`
+- `src/game/` — Spiellogik: `world` (Zustand), `ship`/`wingman`, `asteroid`, `bullet`/`rocket`/`mine`/`siege` (Belagerungs-/Jäger-Rakete), `enemy`, `collision`, `loot`, `crate` (Belohnungs-Kiste), `shop`, `base`, `planet` (normal/shipyard), `constants`
+- **Belohnungs-Kisten** (REQ-REWARD-01): Boss/Schlachtschiff/Event droppt eine Kiste; Einsammeln öffnet `state 'reward'` mit Auswahl 1-von-3 (`rollRewardChoices`/`applyReward`/`chooseReward`).
 - **Titan-Werft-Event** (REQ-WERFT-01): ab Welle `WERFT.eventWave` verteidigt man einen Shipyard-Planeten gegen Belagerungsraketen; Zustand in `world.werft`; danach ist der Titan nur an Shipyard-Planeten (`atShipyard`) kaufbar. Shop-Items schalten per `unlockWave` nach Welle frei (REQ-SHOP-05).
 - `src/input/keyboard.ts` — Tastatureingabe
 - `src/render/` — Zeichnen: `renderer` (Haupt-Renderer), `particles`

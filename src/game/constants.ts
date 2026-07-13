@@ -566,3 +566,19 @@ export const HUNTER = {
   score: 90,
   credits: 70,
 };
+
+// --- Reward crates (pick 1 of 3). REQ-REWARD-01 -----------------------
+// Big kills (bosses, battleships) and events drop a crate; collecting it opens a
+// choice of three rewards. Roguelite-style pacing without any persistence/backend.
+export type RewardKind = "credits" | "ammoAP" | "ammoExpl" | "rockets" | "mines" | "shield" | "life";
+
+export const REWARD = {
+  crateRadius: 15, // collect radius (fly over it like loot)
+  crateLife: 20, // seconds before an uncollected crate drifts off
+  crateDrift: 24, // slow drift speed (px/s)
+  bossChance: 1.0, // a boss asteroid always drops a crate
+  battleshipChance: 0.6, // battleships often drop one
+  eliteChance: 1.0, // the bounty elite always drops one (REQ-EVENT bounty)
+  credits: 700, // amount for the "credits" reward
+  choices: 3, // options offered per crate
+};

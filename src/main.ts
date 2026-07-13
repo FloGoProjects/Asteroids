@@ -8,6 +8,7 @@ import {
   cycleAmmo,
   cycleSecondary,
   closeShop,
+  chooseReward,
   World,
 } from "./game/world.ts";
 import { createKeyboardInput } from "./input/keyboard.ts";
@@ -85,6 +86,19 @@ window.addEventListener("keydown", (e) => {
     } else if (e.code === "Escape") {
       closeShop(world);
     }
+    e.preventDefault();
+    return;
+  }
+
+  // Reward chooser (world paused): pick 1 of 3
+  if (world.state === "reward") {
+    const n = world.rewardChoices.length || 1;
+    if (e.code === "ArrowLeft" || e.code === "KeyA") world.rewardIndex = (world.rewardIndex - 1 + n) % n;
+    else if (e.code === "ArrowRight" || e.code === "KeyD") world.rewardIndex = (world.rewardIndex + 1) % n;
+    else if (e.code === "Enter") chooseReward(world, world.rewardIndex);
+    else if (e.code === "Digit1") chooseReward(world, 0);
+    else if (e.code === "Digit2") chooseReward(world, 1);
+    else if (e.code === "Digit3") chooseReward(world, 2);
     e.preventDefault();
     return;
   }

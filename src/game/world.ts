@@ -15,6 +15,7 @@ import {
   advanceStationBeam,
 } from "./enemy.ts";
 import { Loot, createLoot, updateLoot, isLootGone } from "./loot.ts";
+import { Crate, createCrate, updateCrate, isCrateGone } from "./crate.ts";
 import {
   Rocket,
   Targetable,
@@ -47,6 +48,8 @@ import {
   SHOP,
   WERFT,
   HUNTER,
+  REWARD,
+  RewardKind,
   LootKind,
   SecondaryId,
   WEAPONS,
@@ -64,7 +67,15 @@ import {
   UpgradeId,
 } from "./constants.ts";
 
-export type GameState = "playing" | "paused" | "shop" | "gameover";
+export type GameState = "playing" | "paused" | "shop" | "gameover" | "reward";
+
+/** One selectable option when a reward crate is opened. REQ-REWARD-01. */
+export interface RewardOption {
+  kind: RewardKind;
+  amount: number;
+  label: string;
+  desc: string;
+}
 
 /** Active state of the Titan shipyard-defense event. REQ-WERFT-01. */
 export interface WerftEvent {
@@ -107,6 +118,9 @@ export interface World {
   enemyTimer: number; // seconds until the next enemy spawns
   bases: Base[]; // modular enemy bases (hex-module clusters)
   loot: Loot[]; // collectible drops
+  crates: Crate[]; // reward crates on the field (REQ-REWARD-01)
+  rewardChoices: RewardOption[]; // the 3 options shown while state === "reward"
+  rewardIndex: number; // highlighted reward option (UI navigation)
   rockets: Rocket[]; // in-flight homing rockets
   mines: Mine[]; // deployed space mines
   wingmen: Wingman[]; // friendly drones from the hangar upgrade
@@ -194,6 +208,9 @@ export function createWorld(opts: WorldOptions): World {
     enemyTimer: ENEMY.firstSpawn,
     bases: [],
     loot: [],
+    crates: [],
+    rewardChoices: [],
+    rewardIndex: 0,
     rockets: [],
     mines: [],
     wingmen: [],
@@ -487,6 +504,99 @@ export function closeShop(world: World): void {
   world.ship.invuln = Math.max(world.ship.invuln, 1.2);
 }
 
+// --- Reward crates (REQ-REWARD-01) -------------------------------------
+/** Drop a reward crate at a position (big kills / events). */
+function spawnCrate(world: World, pos: Vec): void {
+  world.crates.push(createCrate(pos, world.rng));
+}
+
+/** All reward options that make sense right now (life only when below the cap). */
+function rewardCandidates(world: World): RewardOption[] {
+  const c: RewardOption[] = [
+    { kind: "credits", amount: REWARD.credits, label: `+${REWARD.credits} Credits`, desc: "Sofort-Bargeld" },
+    { kind: "ammoAP", amount: AMMO.ap.packSize, label: `Panzerbrechend ×${AMMO.ap.packSize}`, desc: "Munitionspaket" },
+    { kind: "ammoExpl", amount: AMMO.explosive.packSize, label: `Explosiv ×${AMMO.explosive.packSize}`, desc: "Munitionspaket" },
+    { kind: "rockets", amount: ROCKET.packSize, label: `Raketen ×${ROCKET.packSize}`, desc: "Zielsuchend" },
+    { kind: "mines", amount: MINE.packSize, label: `Minen ×${MINE.packSize}`, desc: "Minenfeld" },
+    { kind: "shield", amount: 1, label: "Schild aufladen", desc: "Schild voll / +1 Stufe" },
+  ];
+  if (world.lives < GAME.maxLives) {
+    c.push({ kind: "life", amount: 1, label: "Extra-Leben", desc: "+1 Leben" });
+  }
+  return c;
+}
+
+/** Roll REWARD.choices distinct reward options for a crate. REQ-REWARD-01. */
+export function rollRewardChoices(world: World): RewardOption[] {
+  const pool = rewardCandidates(world);
+  // Fisher–Yates shuffle with the world RNG, then take the first N.
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(world.rng.next() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, REWARD.choices);
+}
+
+/** Apply a chosen reward's effect to the world. REQ-REWARD-01. */
+export function applyReward(world: World, opt: RewardOption): void {
+  switch (opt.kind) {
+    case "credits":
+      world.credits += opt.amount;
+      break;
+    case "ammoAP":
+      world.ammoCounts.ap += opt.amount;
+      if (world.ammo === "standard") world.ammo = "ap";
+      break;
+    case "ammoExpl":
+      world.ammoCounts.explosive += opt.amount;
+      break;
+    case "rockets":
+      world.rocketAmmo += opt.amount;
+      break;
+    case "mines":
+      world.mineAmmo += opt.amount;
+      break;
+    case "shield":
+      grantShield(world.ship);
+      break;
+    case "life":
+      if (world.lives < GAME.maxLives) world.lives += 1;
+      break;
+  }
+}
+
+/** Open the reward chooser for a collected crate (pauses the world). */
+function openReward(world: World): void {
+  world.rewardChoices = rollRewardChoices(world);
+  world.rewardIndex = 0;
+  world.state = "reward";
+}
+
+/** Pick a reward option by index, apply it and resume play. REQ-REWARD-01. */
+export function chooseReward(world: World, index: number): void {
+  if (world.state !== "reward") return;
+  const opt = world.rewardChoices[index];
+  if (!opt) return;
+  applyReward(world, opt);
+  world.rewardChoices = [];
+  world.state = "playing";
+  world.ship.invuln = Math.max(world.ship.invuln, 0.8);
+}
+
+/** Drift reward crates, despawn old ones, and open the chooser when one is collected. */
+function updateCrates(world: World, dt: number): void {
+  for (const c of world.crates) updateCrate(c, dt, world);
+  world.crates = world.crates.filter((c) => !isCrateGone(c));
+  for (const c of world.crates) {
+    if (circleHit(world.ship.position, world.ship.radius, c.position, c.radius)) {
+      world.crates = world.crates.filter((x) => x !== c);
+      world.onPickup?.(world.ship.position, "shield"); // reuse a sparkle fx
+      openReward(world);
+      break; // one crate at a time
+    }
+  }
+}
+
 function resetShip(world: World): void {
   world.ship.position = vec(world.width / 2, world.height / 2);
   world.ship.velocity = vec(0, 0);
@@ -771,7 +881,10 @@ function hitAsteroid(
     world.shake = Math.max(world.shake, a.size === "boss" ? 0.8 : big ? 0.45 : 0.3);
     world.onExplosion?.(a.position, big);
     fragments.push(...splitAsteroid(a, world.rng));
-    if (a.size === "boss") dropLoot(world, a.position); // REQ-BOSS-01
+    if (a.size === "boss") {
+      dropLoot(world, a.position); // REQ-BOSS-01
+      if (world.rng.next() < REWARD.bossChance) spawnCrate(world, a.position); // REQ-REWARD-01
+    }
   } else {
     world.shake = Math.max(world.shake, 0.12);
     world.onHit?.(a.position);
@@ -892,6 +1005,7 @@ function retireDeadBases(world: World): void {
       world.shake = Math.max(world.shake, 0.7);
       world.onExplosion?.(base.position, true);
       dropLoot(world, base.position); // REQ-BASE-01
+      if (world.rng.next() < REWARD.battleshipChance) spawnCrate(world, base.position); // REQ-REWARD-01
     } else {
       survivors.push(base);
     }
@@ -1338,6 +1452,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
   // Loot drifts, wraps and expires (REQ-LOOT-01)
   for (const l of world.loot) updateLoot(l, dt, world);
   world.loot = world.loot.filter((l) => !isLootGone(l));
+
+  // Reward crates drift, expire, and open the chooser when collected (REQ-REWARD-01)
+  updateCrates(world, dt);
 
   // Player projectiles -> asteroids / enemies (REQ-COL-02, REQ-AST-02, REQ-ENEMY-01, REQ-ROCKET-01)
   const deadBullets = new Set<Bullet>();

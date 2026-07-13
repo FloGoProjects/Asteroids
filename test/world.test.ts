@@ -10,6 +10,9 @@ import {
   cycleWeapon,
   cycleAmmo,
   cycleSecondary,
+  rollRewardChoices,
+  applyReward,
+  chooseReward,
 } from "../src/game/world.ts";
 import { createAsteroid } from "../src/game/asteroid.ts";
 import { createPlanet } from "../src/game/planet.ts";
@@ -18,6 +21,7 @@ import { createLoot } from "../src/game/loot.ts";
 import { createBullet } from "../src/game/bullet.ts";
 import { createBattleship } from "../src/game/base.ts";
 import { createSiege } from "../src/game/siege.ts";
+import { createCrate } from "../src/game/crate.ts";
 import { vec, length } from "../src/engine/vector2.ts";
 import {
   SHIP,
@@ -39,6 +43,7 @@ import {
   ROCKET,
   MINE,
   HUNTER,
+  REWARD,
 } from "../src/game/constants.ts";
 
 const IDLE = { turnLeft: false, turnRight: false, thrust: false, fire: false, fireSecondary: false };
@@ -1041,6 +1046,60 @@ describe("Titan battleship", () => {
     for (let i = 0; i < 40; i++) updateWorld(w, IDLE, 0.05);
     const m = w.siege.find((x) => x.homing);
     expect(m && m.speed).toBeGreaterThan(s0); // sped up over time
+  });
+
+  // REQ-REWARD-01: reward crates ("pick 1 of 3")
+  it("rolls REWARD.choices distinct reward options", () => {
+    const w = createWorld({ width: 800, height: 600, seed: 1, asteroids: 0 });
+    const opts = rollRewardChoices(w);
+    expect(opts.length).toBe(REWARD.choices);
+    expect(new Set(opts.map((o) => o.kind)).size).toBe(opts.length); // all distinct
+  });
+
+  it("applyReward grants credits, rockets and a life", () => {
+    const w = createWorld({ width: 800, height: 600, seed: 1, asteroids: 0 });
+    w.credits = 0;
+    applyReward(w, { kind: "credits", amount: 500, label: "", desc: "" });
+    expect(w.credits).toBe(500);
+    const r0 = w.rocketAmmo;
+    applyReward(w, { kind: "rockets", amount: 5, label: "", desc: "" });
+    expect(w.rocketAmmo).toBe(r0 + 5);
+    w.lives = 2;
+    applyReward(w, { kind: "life", amount: 1, label: "", desc: "" });
+    expect(w.lives).toBe(3);
+  });
+
+  it("collecting a crate opens the reward chooser and pauses the world", () => {
+    const w = createWorld({ width: 800, height: 600, seed: 1, asteroids: 0 });
+    w.crates.push(createCrate({ ...w.ship.position }));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.state).toBe("reward");
+    expect(w.rewardChoices.length).toBe(REWARD.choices);
+    expect(w.crates.length).toBe(0); // consumed
+  });
+
+  it("chooseReward applies the pick and resumes play", () => {
+    const w = createWorld({ width: 800, height: 600, seed: 1, asteroids: 0 });
+    w.crates.push(createCrate({ ...w.ship.position }));
+    updateWorld(w, IDLE, 1 / 120); // -> reward state
+    const idx = Math.max(0, w.rewardChoices.findIndex((o) => o.kind === "credits"));
+    const opt = w.rewardChoices[idx];
+    const before = w.credits;
+    chooseReward(w, idx);
+    expect(w.state).toBe("playing");
+    expect(w.rewardChoices.length).toBe(0);
+    if (opt.kind === "credits") expect(w.credits).toBe(before + opt.amount);
+  });
+
+  it("a boss asteroid drops a reward crate", () => {
+    const w = createWorld({ width: 800, height: 600, seed: 1, asteroids: 0 });
+    w.ship.invuln = 999;
+    const boss = createAsteroid(vec(600, 300), vec(0, 0), "boss");
+    boss.hp = 1;
+    w.asteroids.push(boss);
+    w.bullets.push(createBullet(vec(600, 300), vec(0, 0), 1, 3, 5));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.crates.length).toBeGreaterThanOrEqual(1);
   });
 
   it("a hunter missile that reaches a vulnerable ship costs a life", () => {
