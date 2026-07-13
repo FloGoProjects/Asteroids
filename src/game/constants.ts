@@ -578,7 +578,21 @@ export const REWARD = {
   crateDrift: 24, // slow drift speed (px/s)
   bossChance: 1.0, // a boss asteroid always drops a crate
   battleshipChance: 0.6, // battleships often drop one
-  eliteChance: 1.0, // the bounty elite always drops one (REQ-EVENT bounty)
+  eliteChance: 1.0, // the bounty elite always drops one (REQ-EVENT-01)
   credits: 700, // amount for the "credits" reward
   choices: 3, // options offered per crate
+};
+
+// --- Bounty elite event (REQ-EVENT-01) ---------------------------------
+// From BOUNTY.fromWave a named, heavily buffed battleship ("Kopfgeld-Elite") drifts in
+// on a timer. Killing it pays a big bounty and always drops a reward crate.
+export const BOUNTY = {
+  fromWave: 4, // the elite starts appearing from this wave
+  firstDelay: 30, // seconds until the first elite (after fromWave is reached)
+  interval: 55, // seconds between elites (only one at a time)
+  hpMult: 2.2, // fortress hp multiplier for the elite
+  shieldBonus: 3, // extra shield charges over the fortress base
+  life: 40, // seconds it lingers before leaving
+  credits: 2500, // bounty paid on kill (on top of the design's own credits)
+  name: "KOPFGELD-ELITE",
 };

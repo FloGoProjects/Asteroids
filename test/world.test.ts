@@ -19,7 +19,7 @@ import { createPlanet } from "../src/game/planet.ts";
 import { createEnemy } from "../src/game/enemy.ts";
 import { createLoot } from "../src/game/loot.ts";
 import { createBullet } from "../src/game/bullet.ts";
-import { createBattleship } from "../src/game/base.ts";
+import { createBattleship, createEliteBattleship } from "../src/game/base.ts";
 import { createSiege } from "../src/game/siege.ts";
 import { createCrate } from "../src/game/crate.ts";
 import { vec, length } from "../src/engine/vector2.ts";
@@ -44,6 +44,7 @@ import {
   MINE,
   HUNTER,
   REWARD,
+  BOUNTY,
 } from "../src/game/constants.ts";
 
 const IDLE = { turnLeft: false, turnRight: false, thrust: false, fire: false, fireSecondary: false };
@@ -1046,6 +1047,43 @@ describe("Titan battleship", () => {
     for (let i = 0; i < 40; i++) updateWorld(w, IDLE, 0.05);
     const m = w.siege.find((x) => x.homing);
     expect(m && m.speed).toBeGreaterThan(s0); // sped up over time
+  });
+
+  // REQ-EVENT-01: bounty elite
+  it("spawns a bounty elite from its wave on a timer", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.wave = BOUNTY.fromWave;
+    w.bountyTimer = 0;
+    updateWorld(w, IDLE, 0.02);
+    expect(w.bases.some((b) => b.elite)).toBe(true);
+  });
+
+  it("does not spawn a bounty elite before its wave", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.wave = BOUNTY.fromWave - 1;
+    w.bountyTimer = 0;
+    updateWorld(w, IDLE, 0.02);
+    expect(w.bases.some((b) => b.elite)).toBe(false);
+  });
+
+  it("killing a bounty elite pays the bounty and drops a crate", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1, asteroids: 0 });
+    w.ship.invuln = 999;
+    const elite = createEliteBattleship(vec(750, 350), vec(0, 0));
+    elite.shield = 0;
+    elite.shieldMax = 0; // strip shield so the hull takes the hit
+    elite.hp = 1;
+    w.bases.push(elite);
+    const credits0 = w.credits;
+    w.bullets.push(createBullet(vec(750, 350), vec(0, 0), 1, 3, 5));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.bases.length).toBe(0); // destroyed
+    expect(w.credits).toBe(credits0 + BATTLESHIPS.fortress.credits + BOUNTY.credits);
+    expect(w.crates.length).toBeGreaterThanOrEqual(1); // guaranteed crate
   });
 
   // REQ-REWARD-01: reward crates ("pick 1 of 3")

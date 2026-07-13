@@ -26,7 +26,7 @@ import {
 } from "./rocket.ts";
 import { Mine, createMine, updateMine, isMineGone } from "./mine.ts";
 import { Wingman, createWingman, steerWingman } from "./wingman.ts";
-import { Base, createBattleship, updateBase, isBaseDead } from "./base.ts";
+import { Base, createBattleship, createEliteBattleship, updateBase, isBaseDead } from "./base.ts";
 import { circleHit, segmentHitsCircle } from "./collision.ts";
 import {
   SHIP,
@@ -50,6 +50,7 @@ import {
   HUNTER,
   REWARD,
   RewardKind,
+  BOUNTY,
   LootKind,
   SecondaryId,
   WEAPONS,
@@ -116,7 +117,8 @@ export interface World {
   enemies: Enemy[]; // hostile fighters
   enemyBullets: Bullet[]; // projectiles fired by enemies
   enemyTimer: number; // seconds until the next enemy spawns
-  bases: Base[]; // modular enemy bases (hex-module clusters)
+  bases: Base[]; // enemy battleships (incl. the bounty elite)
+  bountyTimer: number; // seconds until the next bounty elite appears. REQ-EVENT-01
   loot: Loot[]; // collectible drops
   crates: Crate[]; // reward crates on the field (REQ-REWARD-01)
   rewardChoices: RewardOption[]; // the 3 options shown while state === "reward"
@@ -207,6 +209,7 @@ export function createWorld(opts: WorldOptions): World {
     enemyBullets: [],
     enemyTimer: ENEMY.firstSpawn,
     bases: [],
+    bountyTimer: BOUNTY.firstDelay,
     loot: [],
     crates: [],
     rewardChoices: [],
@@ -651,6 +654,28 @@ function spawnBase(world: World): void {
   world.bases.push(createBattleship(design, vec(x, y), vec(vx, vy)));
 }
 
+/** Bounty elite: a single buffed battleship drifting slowly across, from BOUNTY.fromWave. REQ-EVENT-01. */
+function spawnBountyElite(world: World): void {
+  const rng = world.rng;
+  const fromLeft = rng.next() < 0.5;
+  const y = rng.range(world.height * 0.3, world.height * 0.7);
+  const margin = BATTLESHIPS.fortress.radius + 40;
+  const x = fromLeft ? -margin : world.width + margin;
+  const vx = (fromLeft ? 1 : -1) * BATTLESHIPS.fortress.speed * 0.8;
+  world.bases.push(createEliteBattleship(vec(x, y), vec(vx, 0)));
+}
+
+/** Tick the bounty-elite timer and spawn one (only one at a time) from BOUNTY.fromWave. REQ-EVENT-01. */
+function updateBounty(world: World, dt: number): void {
+  if (!world.wavesEnabled || world.wave < BOUNTY.fromWave) return;
+  if (world.bases.some((b) => b.elite)) return; // only one elite at a time
+  world.bountyTimer -= dt;
+  if (world.bountyTimer <= 0) {
+    spawnBountyElite(world);
+    world.bountyTimer = BOUNTY.interval;
+  }
+}
+
 // --- Enemies (REQ-ENEMY-01, REQ-ENEMY-02) ------------------------------
 /** Chance a station spawn becomes a battleship: small at fromWave, growing with the wave. REQ-BASE-01. */
 function baseChanceForWave(wave: number): number {
@@ -1001,11 +1026,13 @@ function retireDeadBases(world: World): void {
     if (isBaseDead(base)) {
       const spec = BATTLESHIPS[base.design];
       world.score += spec.score;
-      world.credits += spec.credits;
-      world.shake = Math.max(world.shake, 0.7);
+      world.credits += spec.credits + base.bounty; // elites pay a big bounty on top. REQ-EVENT-01
+      world.shake = Math.max(world.shake, base.elite ? 1.0 : 0.7);
       world.onExplosion?.(base.position, true);
       dropLoot(world, base.position); // REQ-BASE-01
-      if (world.rng.next() < REWARD.battleshipChance) spawnCrate(world, base.position); // REQ-REWARD-01
+      // elites always drop a crate; normal battleships sometimes do. REQ-REWARD-01
+      const crateChance = base.elite ? REWARD.eliteChance : REWARD.battleshipChance;
+      if (world.rng.next() < crateChance) spawnCrate(world, base.position);
     } else {
       survivors.push(base);
     }
@@ -1442,6 +1469,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
 
   // Modular bases drift + retire (REQ-BASE-01)
   updateBases(world, dt);
+
+  // Bounty elite event: a buffed battleship on a timer (REQ-EVENT-01)
+  updateBounty(world, dt);
 
   // Homing rockets steer + move (REQ-ROCKET-01)
   updateRockets(world, dt);

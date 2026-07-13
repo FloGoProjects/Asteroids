@@ -12,7 +12,7 @@ import { SiegeMissile } from "../game/siege.ts";
 import { Wingman } from "../game/wingman.ts";
 import { Base } from "../game/base.ts";
 import { visiblePages, visibleItems, lockedItems, isOwned, isEquipped, ShopItem } from "../game/shop.ts";
-import { WEAPONS, AMMO, PLANET, LOOT, GAME, SHIELD, STATION, SHIPS, AUTOCANNON, TRACTOR, DEFLECTOR, WINGMAN, ShipId, LootKind } from "../game/constants.ts";
+import { WEAPONS, AMMO, PLANET, LOOT, GAME, SHIELD, STATION, SHIPS, AUTOCANNON, TRACTOR, DEFLECTOR, WINGMAN, BOUNTY, ShipId, LootKind } from "../game/constants.ts";
 import { fromAngle, add, vec, distance, Vec } from "../engine/vector2.ts";
 import { Particles } from "./particles.ts";
 
@@ -157,6 +157,7 @@ export class Renderer {
     }
     if (world.state === "playing" && world.waveBanner > 0) this.drawWaveBanner(ctx, world);
     if (world.state === "playing" && world.werft) this.drawWerftHud(ctx, world);
+    if (world.state === "playing" && world.bases.some((b) => b.elite)) this.drawBountyBanner(ctx);
     if (world.state === "shop") this.drawShop(ctx, world);
     if (world.state === "reward") this.drawReward(ctx, world);
     if (world.state === "gameover") this.drawGameOver(ctx, world);
@@ -239,6 +240,18 @@ export class Renderer {
     }
 
     ctx.textAlign = "left";
+    ctx.restore();
+  }
+
+  /** Top banner while a bounty elite is on the field. REQ-EVENT-01. */
+  private drawBountyBanner(ctx: CanvasRenderingContext2D): void {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.font = "800 22px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillStyle = "#ffca6a";
+    ctx.shadowColor = "#ff7a2e";
+    ctx.shadowBlur = 14;
+    ctx.fillText(`◈ ${BOUNTY.name} · ${BOUNTY.credits} CR KOPFGELD`, this.w / 2, 44);
     ctx.restore();
   }
 
@@ -1302,6 +1315,21 @@ export class Renderer {
     ctx.rotate(base.angle);
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
+
+    if (base.elite) {
+      // pulsing golden bounty ring around the hull
+      const pulse = 0.5 + 0.5 * Math.sin(this.t * 4);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = `rgba(255,209,102,${0.4 + pulse * 0.4})`;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = "#ffd166";
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.arc(0, 0, base.radius + 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // hull body
     const g = ctx.createLinearGradient(0, -28, 0, 28);

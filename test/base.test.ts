@@ -1,10 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { createBattleship, updateBase, isBaseDead } from "../src/game/base.ts";
+import { createBattleship, createEliteBattleship, updateBase, isBaseDead } from "../src/game/base.ts";
 import { vec } from "../src/engine/vector2.ts";
-import { BASE, BATTLESHIPS } from "../src/game/constants.ts";
+import { BASE, BATTLESHIPS, BOUNTY } from "../src/game/constants.ts";
 
 // REQ-BASE-01: enemy battleships (single hull, one health bar)
 describe("enemy battleship", () => {
+  it("the bounty elite is a buffed fortress worth a bounty", () => {
+    const e = createEliteBattleship(vec(0, 0), vec(-10, 0));
+    expect(e.elite).toBe(true);
+    expect(e.bounty).toBe(BOUNTY.credits);
+    expect(e.hp).toBeGreaterThan(BATTLESHIPS.fortress.hp);
+    expect(e.shieldMax).toBeGreaterThan(BATTLESHIPS.fortress.shieldMax);
+  });
+
   it("builds a ship from its design spec (hp, radius, shield)", () => {
     const spec = BATTLESHIPS.dreadnought;
     const b = createBattleship("dreadnought", vec(100, 100), vec(0, 0));

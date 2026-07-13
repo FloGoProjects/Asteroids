@@ -2,7 +2,7 @@
 import { Vec, add, scale } from "../engine/vector2.ts";
 import { wrapVec } from "../engine/wrap.ts";
 import { WorldBounds } from "./ship.ts";
-import { BASE, BATTLESHIPS, BattleshipDesign } from "./constants.ts";
+import { BASE, BATTLESHIPS, BOUNTY, BattleshipDesign } from "./constants.ts";
 
 export type { BattleshipDesign } from "./constants.ts";
 
@@ -21,6 +21,8 @@ export interface Base {
   wobble: number; // render phase
   fireTimer: number; // seconds until the next main-gun volley
   hangarTimer: number; // seconds until the next fighter launch (fortress only)
+  elite: boolean; // bounty elite: buffed hull, golden, drops a guaranteed crate. REQ-EVENT-01
+  bounty: number; // extra credits paid for killing it (0 = normal battleship)
 }
 
 /** Build a battleship of the given design, heading along its velocity. */
@@ -41,7 +43,20 @@ export function createBattleship(design: BattleshipDesign, position: Vec, veloci
     wobble: 0,
     fireTimer: spec.fireCooldown,
     hangarTimer: spec.hangarCooldown,
+    elite: false,
+    bounty: 0,
   };
+}
+
+/** A buffed "bounty elite" battleship (fortress-based): tankier, longer-lived, worth a bounty. REQ-EVENT-01. */
+export function createEliteBattleship(position: Vec, velocity: Vec): Base {
+  const b = createBattleship("fortress", position, velocity);
+  b.hp = b.maxHp = Math.round(BATTLESHIPS.fortress.hp * BOUNTY.hpMult);
+  b.shieldMax = b.shield = BATTLESHIPS.fortress.shieldMax + BOUNTY.shieldBonus;
+  b.life = BOUNTY.life;
+  b.elite = true;
+  b.bounty = BOUNTY.credits;
+  return b;
 }
 
 /** Drift, wrap, age, and recharge the shield. */
