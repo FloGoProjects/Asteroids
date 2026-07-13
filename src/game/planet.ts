@@ -2,16 +2,26 @@
 import { Vec, add, scale } from "../engine/vector2.ts";
 import { Rng } from "../engine/random.ts";
 
+/** Normal planets are plain shop pads; shipyard planets also sell the Titan. REQ-WERFT-01. */
+export type PlanetKind = "normal" | "shipyard";
+
 export interface Planet {
   position: Vec;
-  velocity: Vec; // horizontal only
+  velocity: Vec; // horizontal only (except during the shipyard-defense approach)
   radius: number;
   hue: number; // base colour for visual variety
   spin: number; // slow surface rotation (render only)
   angle: number; // current surface rotation
+  kind: PlanetKind; // "shipyard" planets carry an orbital werft (Titan available)
 }
 
-export function createPlanet(position: Vec, velocity: Vec, radius: number, rng?: Rng): Planet {
+export function createPlanet(
+  position: Vec,
+  velocity: Vec,
+  radius: number,
+  rng?: Rng,
+  kind: PlanetKind = "normal",
+): Planet {
   return {
     position: { ...position },
     velocity: { ...velocity },
@@ -19,6 +29,7 @@ export function createPlanet(position: Vec, velocity: Vec, radius: number, rng?:
     hue: rng ? rng.range(180, 300) : 210, // teal..violet gas giants
     spin: rng ? rng.range(0.04, 0.12) : 0.08,
     angle: rng ? rng.range(0, Math.PI * 2) : 0,
+    kind,
   };
 }
 

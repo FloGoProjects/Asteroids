@@ -4,7 +4,8 @@ import { createRng, Rng } from "../engine/random.ts";
 import { Ship, ShipInput, createShip, updateShip, grantShield } from "./ship.ts";
 import { Bullet, createBullet, updateBullet, isExpired } from "./bullet.ts";
 import { Asteroid, createAsteroid, updateAsteroid, splitAsteroid } from "./asteroid.ts";
-import { Planet, createPlanet, updatePlanet, isPlanetGone } from "./planet.ts";
+import { Planet, PlanetKind, createPlanet, updatePlanet, isPlanetGone } from "./planet.ts";
+import { SiegeMissile, createSiege, updateSiege } from "./siege.ts";
 import {
   Enemy,
   createEnemy,
@@ -44,6 +45,7 @@ import {
   ROCKET,
   MINE,
   SHOP,
+  WERFT,
   LootKind,
   SecondaryId,
   WEAPONS,
@@ -61,6 +63,15 @@ import {
 } from "./constants.ts";
 
 export type GameState = "playing" | "paused" | "shop" | "gameover";
+
+/** Active state of the Titan shipyard-defense event. REQ-WERFT-01. */
+export interface WerftEvent {
+  phase: "approach" | "defend"; // approach: drifting to centre; defend: under siege
+  hp: number; // shipyard damage bar remaining
+  hpMax: number;
+  toLaunch: number; // missiles still to be launched this defense
+  launchTimer: number; // seconds until the next missile launches
+}
 
 export interface Input extends ShipInput {
   fire: boolean;
@@ -84,6 +95,10 @@ export interface World {
   asteroids: Asteroid[];
   planet: Planet | null; // shop landing pad drifting across, null when none
   planetTimer: number; // seconds until the next planet appears
+  werft: WerftEvent | null; // active Titan shipyard-defense event (REQ-WERFT-01)
+  werftDone: boolean; // true once the defense has been won (shipyards may now spawn)
+  siege: SiegeMissile[]; // in-flight siege missiles attacking the shipyard
+  atShipyard: boolean; // the shop currently open was reached at a shipyard planet
   enemies: Enemy[]; // hostile fighters
   enemyBullets: Bullet[]; // projectiles fired by enemies
   enemyTimer: number; // seconds until the next enemy spawns
@@ -165,6 +180,10 @@ export function createWorld(opts: WorldOptions): World {
     asteroids: [],
     planet: null,
     planetTimer: PLANET.firstSpawn,
+    werft: null,
+    werftDone: false,
+    siege: [],
+    atShipyard: false,
     enemies: [],
     enemyBullets: [],
     enemyTimer: ENEMY.firstSpawn,
@@ -212,6 +231,11 @@ export function createWorld(opts: WorldOptions): World {
   return world;
 }
 
+/** After the shipyard-defense is won, ~every third planet carries a shipyard. REQ-WERFT-01. */
+function nextPlanetKind(world: World): PlanetKind {
+  return world.werftDone && world.rng.next() < WERFT.spawnChance ? "shipyard" : "normal";
+}
+
 /** Spawn a planet just off one side, drifting horizontally across. REQ-PLANET-01. */
 function spawnPlanet(world: World): void {
   const rng = world.rng;
@@ -220,10 +244,109 @@ function spawnPlanet(world: World): void {
   const r = PLANET.radius;
   const x = fromLeft ? -r : world.width + r;
   const vx = (fromLeft ? 1 : -1) * PLANET.speed;
-  world.planet = createPlanet(vec(x, y), vec(vx, 0), r, rng);
+  const kind = nextPlanetKind(world);
+  world.planet = createPlanet(vec(x, y), vec(vx, 0), r, rng, kind);
 }
 
-function updatePlanetSpawns(world: World, dt: number): void {
+/** Kick off the Titan shipyard-defense: a shipyard planet drifts in from an edge toward centre. REQ-WERFT-01. */
+function startWerftEvent(world: World): void {
+  const rng = world.rng;
+  const fromLeft = rng.next() < 0.5;
+  const r = PLANET.radius;
+  const y = rng.range(world.height * 0.3, world.height * 0.7);
+  const x = fromLeft ? -r : world.width + r;
+  world.planet = createPlanet(vec(x, y), vec(0, 0), r, rng, "shipyard");
+  world.siege = [];
+  world.werft = {
+    phase: "approach",
+    hp: WERFT.shipyardHp,
+    hpMax: WERFT.shipyardHp,
+    toLaunch: WERFT.siegeCount,
+    launchTimer: WERFT.siegeFirstDelay,
+  };
+}
+
+/** Spawn one siege missile from a random screen edge, aimed straight at the shipyard planet. */
+function launchSiege(world: World, planet: Planet): void {
+  const rng = world.rng;
+  const side = Math.floor(rng.next() * 4);
+  let p: Vec;
+  if (side === 0) p = vec(rng.range(0, world.width), -20);
+  else if (side === 1) p = vec(world.width + 20, rng.range(0, world.height));
+  else if (side === 2) p = vec(rng.range(0, world.width), world.height + 20);
+  else p = vec(-20, rng.range(0, world.height));
+  const dir = normalize(sub(planet.position, p));
+  world.siege.push(createSiege(p, scale(dir, WERFT.siegeSpeed)));
+}
+
+/** Advance the shipyard-defense: approach to centre, launch/track missiles, resolve win/loss. REQ-WERFT-01. */
+function updateWerftEvent(world: World, dt: number): void {
+  const ev = world.werft;
+  const planet = world.planet;
+  if (!ev || !planet) return;
+  planet.angle += planet.spin * dt; // keep the surface turning (render only)
+
+  if (ev.phase === "approach") {
+    const center = vec(world.width / 2, world.height / 2);
+    const toC = sub(center, planet.position);
+    const d = Math.hypot(toC.x, toC.y);
+    if (d <= WERFT.arriveDist) {
+      planet.position = center;
+      planet.velocity = vec(0, 0);
+      ev.phase = "defend";
+    } else {
+      planet.position = add(planet.position, scale(toC, Math.min(1, (WERFT.approachSpeed * dt) / d)));
+    }
+    return;
+  }
+
+  // defend: launch missiles on a timer, move them, detonate those that reach the planet
+  if (ev.toLaunch > 0) {
+    ev.launchTimer -= dt;
+    if (ev.launchTimer <= 0) {
+      launchSiege(world, planet);
+      ev.toLaunch -= 1;
+      ev.launchTimer = WERFT.siegeInterval;
+    }
+  }
+  const survivors: SiegeMissile[] = [];
+  for (const m of world.siege) {
+    updateSiege(m, dt);
+    if (distance(m.position, planet.position) <= planet.radius + m.radius) {
+      ev.hp -= 1; // struck the shipyard
+      world.shake = Math.max(world.shake, 0.5);
+      world.onExplosion?.(m.position, false);
+    } else {
+      survivors.push(m);
+    }
+  }
+  world.siege = survivors;
+
+  if (ev.hp <= 0) {
+    // shipyard overrun — the defense fails and the event re-appears later
+    world.onExplosion?.(planet.position, true);
+    world.shake = Math.max(world.shake, 0.9);
+    world.planet = null;
+    world.werft = null;
+    world.siege = [];
+    world.planetTimer = PLANET.interval;
+    return;
+  }
+  if (ev.toLaunch === 0 && world.siege.length === 0) {
+    // defense won — Titan unlocked; hand the shipyard back to the normal drift so it can be landed on
+    world.werftDone = true;
+    const dir = planet.position.x < world.width / 2 ? 1 : -1;
+    planet.velocity = vec(dir * PLANET.speed, 0);
+    world.werft = null;
+  }
+}
+
+/** Drive the active shipyard-defense event, or the normal planet drift/spawn cycle. */
+function updatePlanets(world: World, dt: number): void {
+  if (world.werft) {
+    updateWerftEvent(world, dt);
+    return;
+  }
   if (world.planet) {
     updatePlanet(world.planet, dt);
     if (isPlanetGone(world.planet, world.width)) {
@@ -232,7 +355,10 @@ function updatePlanetSpawns(world: World, dt: number): void {
     }
   } else {
     world.planetTimer -= dt;
-    if (world.planetTimer <= 0) spawnPlanet(world);
+    if (world.planetTimer <= 0) {
+      if (!world.werftDone && world.wavesEnabled && world.wave >= WERFT.eventWave) startWerftEvent(world);
+      else spawnPlanet(world);
+    }
   }
 }
 
@@ -255,6 +381,10 @@ function updateWaves(world: World, dt: number): void {
 
 /** Landing: hold the ship on the planet to open the shop. REQ-LAND-01. */
 function updateLanding(world: World, dt: number): void {
+  if (world.werft) {
+    world.landProgress = 0; // no landing while the shipyard is still under siege. REQ-WERFT-01
+    return;
+  }
   const p = world.planet;
   const onPad = p !== null && distance(world.ship.position, p.position) <= p.radius;
   if (!onPad) {
@@ -267,6 +397,7 @@ function updateLanding(world: World, dt: number): void {
   if (world.landProgress >= PLANET.landTime) {
     world.landProgress = 0;
     world.landLock = true;
+    world.atShipyard = p.kind === "shipyard"; // shipyard planets sell the Titan. REQ-WERFT-01
     world.state = "shop";
     world.shopIndex = 0;
     world.shopPage = 0;
@@ -682,6 +813,44 @@ function retireDeadBases(world: World): void {
   world.bases = survivors;
 }
 
+/** Player projectiles (bullets/rockets/mines) knock down incoming siege missiles. REQ-WERFT-01. */
+function interceptSiege(
+  world: World,
+  deadBullets: Set<Bullet>,
+  deadRockets: Set<Rocket>,
+  deadMines: Set<Mine>,
+): void {
+  if (world.siege.length === 0) return;
+  const downed = new Set<SiegeMissile>();
+  const tryHit = (pos: Vec, radius: number): boolean => {
+    for (const m of world.siege) {
+      if (downed.has(m)) continue;
+      if (circleHit(pos, radius, m.position, m.radius)) {
+        downed.add(m);
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const b of world.bullets) {
+    if (!deadBullets.has(b) && tryHit(b.position, b.radius)) deadBullets.add(b);
+  }
+  for (const r of world.rockets) {
+    if (!deadRockets.has(r) && tryHit(r.position, r.radius)) deadRockets.add(r);
+  }
+  for (const m of world.mines) {
+    if (!deadMines.has(m) && tryHit(m.position, m.radius)) deadMines.add(m);
+  }
+  if (downed.size) {
+    for (const m of downed) {
+      world.score += WERFT.siegeScore;
+      world.credits += WERFT.siegeCredits;
+      world.onExplosion?.(m.position, false);
+    }
+    world.siege = world.siege.filter((m) => !downed.has(m));
+  }
+}
+
 /** Equip a weapon the player owns (ignored otherwise). */
 export function equipWeapon(world: World, id: WeaponId): void {
   if (world.ownedWeapons.includes(id)) world.weapon = id;
@@ -992,8 +1161,8 @@ export function updateWorld(world: World, input: Input, dt: number): void {
   for (const b of world.bullets) updateBullet(b, dt, world);
   world.bullets = world.bullets.filter((b) => !isExpired(b));
 
-  // Planet (shop landing pad) drift & spawning (REQ-PLANET-01)
-  updatePlanetSpawns(world, dt);
+  // Planet drift/spawn + Titan shipyard-defense event (REQ-PLANET-01, REQ-WERFT-01)
+  updatePlanets(world, dt);
 
   // Landing on the planet opens the shop (REQ-LAND-01)
   updateLanding(world, dt);
@@ -1135,6 +1304,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
     if (deadMines.has(m)) continue;
     if (hitBases(world, m.position, m.radius, 0, m.damage)) deadMines.add(m);
   }
+
+  // Player projectiles intercept incoming siege missiles (REQ-WERFT-01)
+  interceptSiege(world, deadBullets, deadRockets, deadMines);
 
   if (deadBullets.size) world.bullets = world.bullets.filter((b) => !deadBullets.has(b));
   if (deadRockets.size) world.rockets = world.rockets.filter((r) => !deadRockets.has(r));

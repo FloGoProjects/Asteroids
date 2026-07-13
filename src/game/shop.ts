@@ -32,6 +32,8 @@ export interface ShopItem {
   ref: WeaponId | AmmoId | ShipId | UpgradeId | EquipmentRef | "rocket" | "mine"; // what the purchase grants
   desc: string;
   random?: boolean; // stocked only randomly (see world.shopStock)
+  unlockWave?: number; // shop reveals this item only from this wave on (default 1). REQ-SHOP-05
+  shipyardOnly?: boolean; // sold only at shipyard planets (Titan). REQ-WERFT-01
 }
 
 export const SHOP_ITEMS: ShopItem[] = [
@@ -50,6 +52,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: WEAPONS.ballista.price,
     ref: "ballista",
     desc: "Große Reichweite · präzise · hoher Schaden",
+    unlockWave: 2,
   },
   {
     id: "ammo-ap",
@@ -66,6 +69,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: AMMO.explosive.price,
     ref: "explosive",
     desc: "Dreifacher Trefferradius",
+    unlockWave: 2,
   },
   {
     id: "ammo-rocket",
@@ -74,6 +78,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: ROCKET.price,
     ref: "rocket",
     desc: "Zielsuchend · S / ↓ abfeuern",
+    unlockWave: 3,
   },
   {
     id: "ammo-mine",
@@ -82,6 +87,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: MINE.price,
     ref: "mine",
     desc: "Minenfeld hinterm Schiff · X wechseln",
+    unlockWave: 4,
   },
   {
     id: "ship-deltaRaptor",
@@ -90,6 +96,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: SHIPS.deltaRaptor.price,
     ref: "deltaRaptor",
     desc: "Wendiger Interceptor · schneller & agiler",
+    unlockWave: 3,
   },
   {
     id: "ship-titan",
@@ -98,6 +105,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: SHIPS.titan.price,
     ref: "titan",
     desc: "Schlachtschiff · sehr träge · 2 Türme zur Maus · aufrüstbar",
+    shipyardOnly: true, // only buyable in a planet's orbital shipyard. REQ-WERFT-01
   },
   {
     id: "extra-life",
@@ -149,8 +157,21 @@ export function itemsForPage(kind: ShopItemKind): ShopItem[] {
 /** Items on a page that are actually available this visit. REQ-SHOP-04, REQ-SHIP-05. */
 export function visibleItems(world: World, kind: ShopItemKind): ShopItem[] {
   return itemsForPage(kind).filter((i) => {
+    if ((i.unlockWave ?? 1) > world.wave) return false; // not yet unlocked this wave. REQ-SHOP-05
     if (i.random && !world.shopStock.includes(i.id)) return false; // random equipment out of stock
-    if (i.kind === "upgrade" && !world.ownedShips.includes("titan")) return false; // upgrades need the Titan
+    if (i.shipyardOnly && !world.atShipyard) return false; // Titan sold only at shipyards. REQ-WERFT-01
+    // Titan upgrades need the Titan AND an orbital shipyard to fit them. REQ-WERFT-01
+    if (i.kind === "upgrade" && (!world.atShipyard || !world.ownedShips.includes("titan"))) return false;
+    return true;
+  });
+}
+
+/** Wave-locked items on a page, shown greyed as "coming soon" teasers. REQ-SHOP-05. */
+export function lockedItems(world: World, kind: ShopItemKind): ShopItem[] {
+  return itemsForPage(kind).filter((i) => {
+    if ((i.unlockWave ?? 1) <= world.wave) return false; // already unlocked
+    if (i.kind === "upgrade") return false; // upgrades are Titan-/shipyard-gated, not wave-gated
+    if (i.random && !world.shopStock.includes(i.id)) return false; // don't tease out-of-stock random gear
     return true;
   });
 }

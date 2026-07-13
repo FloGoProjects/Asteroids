@@ -7,9 +7,10 @@ import { Enemy } from "../game/enemy.ts";
 import { Loot } from "../game/loot.ts";
 import { Rocket } from "../game/rocket.ts";
 import { Mine } from "../game/mine.ts";
+import { SiegeMissile } from "../game/siege.ts";
 import { Wingman } from "../game/wingman.ts";
 import { Base } from "../game/base.ts";
-import { SHOP_PAGES, visibleItems, isOwned, isEquipped, ShopItem } from "../game/shop.ts";
+import { SHOP_PAGES, visibleItems, lockedItems, isOwned, isEquipped, ShopItem } from "../game/shop.ts";
 import { WEAPONS, AMMO, PLANET, LOOT, GAME, STATION, SHIPS, AUTOCANNON, TRACTOR, WINGMAN, ShipId, LootKind } from "../game/constants.ts";
 import { fromAngle, add, vec, distance, Vec } from "../engine/vector2.ts";
 import { Particles } from "./particles.ts";
@@ -106,6 +107,8 @@ export class Renderer {
     for (const r of world.rockets) this.drawRocket(ctx, r);
     // Space mines
     for (const m of world.mines) this.drawMine(ctx, m);
+    // Incoming siege missiles (shipyard-defense event)
+    for (const m of world.siege) this.drawSiege(ctx, m);
 
     // Particles under/over ship
     particles.draw(ctx);
@@ -148,9 +151,89 @@ export class Renderer {
       if (boss) this.drawBossBar(ctx, boss.hp / boss.maxHp);
     }
     if (world.state === "playing" && world.waveBanner > 0) this.drawWaveBanner(ctx, world);
+    if (world.state === "playing" && world.werft) this.drawWerftHud(ctx, world);
     if (world.state === "shop") this.drawShop(ctx, world);
     if (world.state === "gameover") this.drawGameOver(ctx, world);
     if (world.state === "paused") this.drawPause(ctx);
+  }
+
+  /** A slow incoming siege missile: warhead + fins + exhaust, pointing along its heading. REQ-WERFT-01. */
+  private drawSiege(ctx: CanvasRenderingContext2D, m: SiegeMissile): void {
+    const ang = Math.atan2(m.velocity.y, m.velocity.x);
+    ctx.save();
+    ctx.translate(m.position.x, m.position.y);
+    ctx.rotate(ang);
+    // exhaust flare at the tail
+    const flick = 0.6 + 0.4 * Math.sin(this.t * 30 + m.position.x);
+    ctx.fillStyle = `rgba(255, 140, 40, ${0.5 * flick})`;
+    ctx.beginPath();
+    ctx.moveTo(-m.radius, 0);
+    ctx.lineTo(-m.radius - 12 * flick, -3);
+    ctx.lineTo(-m.radius - 12 * flick, 3);
+    ctx.closePath();
+    ctx.fill();
+    // body
+    ctx.fillStyle = "#d94c3a";
+    ctx.strokeStyle = "#ff9a6a";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(m.radius + 4, 0); // nose
+    ctx.lineTo(-m.radius, -m.radius * 0.7);
+    ctx.lineTo(-m.radius, m.radius * 0.7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // warning glow
+    ctx.shadowColor = "#ff5a3c";
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = "#ffd0a0";
+    ctx.beginPath();
+    ctx.arc(m.radius * 0.2, 0, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Shipyard-defense HUD: banner + shipyard damage bar + missiles remaining. REQ-WERFT-01. */
+  private drawWerftHud(ctx: CanvasRenderingContext2D, world: World): void {
+    const ev = world.werft;
+    if (!ev) return;
+    ctx.save();
+    ctx.textAlign = "center";
+
+    // banner
+    ctx.font = "800 22px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillStyle = "#ffca6a";
+    ctx.shadowColor = "#ff7a2e";
+    ctx.shadowBlur = 14;
+    const title = ev.phase === "approach" ? "◈ ORBITAL-WERFT NÄHERT SICH" : "◈ WERFT VERTEIDIGEN";
+    ctx.fillText(title, this.w / 2, 44);
+
+    if (ev.phase === "defend") {
+      ctx.font = "600 13px 'Segoe UI', system-ui, sans-serif";
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(255,207,122,0.85)";
+      const inFlight = world.siege.length;
+      ctx.fillText(`Raketen abfangen — noch ${ev.toLaunch + inFlight} unterwegs`, this.w / 2, 64);
+
+      // shipyard damage bar
+      const barW = 240;
+      const barH = 10;
+      const bx = (this.w - barW) / 2;
+      const by = 74;
+      const ratio = Math.max(0, ev.hp / ev.hpMax);
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      this.roundRect(ctx, bx, by, barW, barH, 5);
+      ctx.fill();
+      ctx.fillStyle = ratio > 0.5 ? "#5fdc7a" : ratio > 0.25 ? "#ffc04a" : "#ff5a5a";
+      this.roundRect(ctx, bx, by, barW * ratio, barH, 5);
+      ctx.fill();
+      ctx.font = "700 11px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillStyle = "#cfd8e4";
+      ctx.fillText(`WERFT-INTEGRITÄT  ${ev.hp}/${ev.hpMax}`, this.w / 2, by + barH + 14);
+    }
+
+    ctx.textAlign = "left";
+    ctx.restore();
   }
 
   private drawPause(ctx: CanvasRenderingContext2D): void {
@@ -262,14 +345,51 @@ export class Renderer {
     ctx.stroke();
     ctx.setLineDash([]);
 
+    // orbital shipyard ring (shipyard planets sell the Titan). REQ-WERFT-01
+    if (p.kind === "shipyard") this.drawShipyardRing(ctx, p);
+
     // label above the planet
     ctx.shadowBlur = 6;
-    ctx.fillStyle = COLORS.hud;
+    const shipyard = p.kind === "shipyard";
+    ctx.fillStyle = shipyard ? "#ffca6a" : COLORS.hud;
+    ctx.shadowColor = shipyard ? "#ffca6a" : COLORS.hud;
     ctx.font = "600 13px 'Segoe UI', system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("◊ LANDEZONE — SHOP", x, y - r - 22);
+    ctx.fillText(shipyard ? "◈ ORBITAL-WERFT — TITAN" : "◊ LANDEZONE — SHOP", x, y - r - 22);
     ctx.textAlign = "left";
 
+    ctx.restore();
+  }
+
+  /** Rotating amber shipyard ring drawn around a shipyard planet. REQ-WERFT-01. */
+  private drawShipyardRing(ctx: CanvasRenderingContext2D, p: Planet): void {
+    const { x, y } = p.position;
+    const ringR = p.radius + 30;
+    ctx.save();
+    ctx.translate(x, y);
+    // faint orbit track
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = "rgba(255, 190, 90, 0.35)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ringR, ringR * 0.42, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // dock modules riding the ring
+    const modules = 6;
+    for (let i = 0; i < modules; i++) {
+      const a = this.t * 0.5 + (i / modules) * Math.PI * 2;
+      const mx = Math.cos(a) * ringR;
+      const my = Math.sin(a) * ringR * 0.42;
+      const front = Math.sin(a) > 0; // near modules a touch brighter
+      ctx.fillStyle = front ? "#ffcf7a" : "#a86f28";
+      ctx.strokeStyle = "#5a3d15";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.rect(mx - 5, my - 3, 10, 6);
+      ctx.fill();
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -1870,13 +1990,15 @@ export class Renderer {
     };
     const activeKind = SHOP_PAGES[world.shopPage];
     const items = visibleItems(world, activeKind);
+    const locked = lockedItems(world, activeKind); // greyed teasers below the buyable rows
 
     const panelW = Math.min(600, this.w - 80);
     const headerH = 62;
     const tabH = 46;
     const footerH = 46;
     const rowH = 86;
-    const panelH = headerH + tabH + Math.max(items.length, 1) * rowH + footerH;
+    const rowCount = Math.max(items.length + locked.length, 1);
+    const panelH = headerH + tabH + rowCount * rowH + footerH;
     const px = (this.w - panelW) / 2;
     const py = (this.h - panelH) / 2;
 
@@ -1927,11 +2049,16 @@ export class Renderer {
 
     // items on the active page
     const listTop = py + headerH + tabH + 6;
-    if (items.length === 0) {
+    if (items.length === 0 && locked.length === 0) {
       ctx.textAlign = "center";
       ctx.fillStyle = "#7f8ea3";
       ctx.font = "600 16px 'Segoe UI', system-ui, sans-serif";
-      const msg = activeKind === "upgrade" ? "Titan-Schiff erforderlich" : "— leer —";
+      const msg =
+        activeKind === "upgrade"
+          ? world.atShipyard
+            ? "Titan-Schiff erforderlich"
+            : "Nur in der Orbital-Werft"
+          : "— leer —";
       ctx.fillText(msg, this.w / 2, listTop + rowH / 2);
       ctx.textAlign = "left";
     }
@@ -2003,6 +2130,35 @@ export class Renderer {
           ctx.fillText(`Leben: ${world.lives}/${GAME.maxLives}`, px + panelW - 30, y + rowH / 2 + 16);
         }
       }
+    });
+
+    // locked teasers: greyed rows with "ab Welle N" instead of a price (not selectable). REQ-SHOP-05
+    locked.forEach((item, li) => {
+      const y = listTop + (items.length + li) * rowH;
+      ctx.globalAlpha = 0.4;
+
+      const iconSize = 54;
+      const iconX = px + 28;
+      const iconY = y + (rowH - iconSize) / 2;
+      ctx.fillStyle = "rgba(255,255,255,0.04)";
+      this.roundRect(ctx, iconX, iconY, iconSize, iconSize, 10);
+      ctx.fill();
+      this.drawShopIcon(ctx, item, iconX, iconY, iconSize);
+
+      const textX = iconX + iconSize + 18;
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#8a97a8";
+      ctx.font = "700 19px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText(item.name, textX, y + rowH / 2 - 4);
+      ctx.font = "500 13px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillStyle = "#5c6a7a";
+      ctx.fillText(item.desc, textX, y + rowH / 2 + 18);
+
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#7f8ea3";
+      ctx.font = "700 15px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText(`🔒 ab Welle ${item.unlockWave}`, px + panelW - 30, y + rowH / 2 + 2);
+      ctx.globalAlpha = 1;
     });
 
     // controls hint

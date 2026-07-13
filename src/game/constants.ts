@@ -514,3 +514,23 @@ export const PLANET = {
   interval: 30, // seconds between planets after one leaves
   landTime: 2.5, // seconds the ship must hold on the planet to land
 };
+
+// --- Titan shipyard-defense event (REQ-WERFT-01) -----------------------
+// A one-off "level": a planet ringed by an orbital shipyard drifts to the
+// centre and is besieged by slow incoming missiles. Intercept enough of them
+// (keep the shipyard's damage bar above 0) and the Titan becomes buyable there.
+// Afterwards ~1/3 of planets carry a shipyard (the only place to buy the Titan).
+export const WERFT = {
+  eventWave: 5, // the defense event first appears once this wave is reached
+  approachSpeed: 80, // px/s the event planet drifts toward screen centre
+  arriveDist: 8, // snap to centre / switch to "defend" within this many px
+  shipyardHp: 6, // damage bar: each missile that gets through chips one off
+  siegeCount: 10, // missiles launched across the whole defense
+  siegeInterval: 1.5, // seconds between missile launches
+  siegeFirstDelay: 1.2, // seconds after arrival before the first missile
+  siegeSpeed: 62, // slow missile approach speed (px/s)
+  siegeRadius: 9, // missile size / hit + intercept radius
+  siegeScore: 60, // score for intercepting a missile
+  siegeCredits: 45, // credits for intercepting a missile
+  spawnChance: 0.34, // ~every third planet carries a shipyard (after the event)
+};

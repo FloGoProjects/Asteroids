@@ -46,6 +46,7 @@
     "v1.13.1": "Bugfix Schiffwechsel im Shop: der Shop unterschied nicht zwischen 'besessen' und 'ausgerüstet' -> jedes besessene Schiff zeigte AUSGERÜSTET und purchase gab 'owned' zurück, ein Wechsel war unmöglich. Neu isEquipped() (shop.ts); purchase re-equippt ein besessenes, nicht aktives Schiff/Waffe kostenlos (Result 'equipped'), nur das aktive zeigt AUSGERÜSTET, die übrigen 'WECHSELN'. Renderer nutzt isEquipped statt isOwned für das Label + WECHSELN-Zeile. Verifiziert per Unit-Tests + Offscreen-fillText-Spy (AUSGERÜSTET beim aktiven, WECHSELN beim anderen Schiff).",
     "v1.13": "Drittes Schiff 'Titan' (Schlachtschiff) mit maus-gezielten Türmen (REQ-SHIP-04). Neuer ShipSpec-Felder shieldCapacity + turrets (TurretMount[]). Träge Flugwerte, 3 Ladungen eingebaute Schilde, 3 Türme. Maus-Eingabe: keyboard.ts trackt Zeiger als Input.aim + linke Maustaste feuert (kombiniert mit Leertaste). world.ts: aimAngle aus Input.aim, fireWeapon feuert aus jeder Turmmündung entlang aimAngle (Ammo einmal pro Salve), equipShip überträgt Türme + stuft Schild monoton hoch. Renderer: drawTitanBody (Rumpf + zur Maus schwenkende Läufe), Shop-Icon, drawShip bekommt aimAngle. Shop-Item ship-titan (6500 CR). Verifiziert: 5 neue Unit-Tests + sichtbarkeits-unabhängige Offscreen-Pixelchecks (Turm-Mündung folgt Zielpunkt, Schiff/Icon rendern). HINWEIS: kein Live-Screenshot möglich (Browser-Pane hidden -> rAF pausiert).",
     "future": "Weitere Ideen: mehr Schiffe/Waffen/Gegnertypen, Highscore/Persistenz (localStorage), Soundeffekte/Musik.",
+    "v1.20": "Shop-Progression + Titan-Werft-Verteidigung (REQ-SHOP-05, REQ-WERFT-01). (A) Progressiver Unlock: ShopItem.unlockWave (Default 1), visibleItems blendet nach world.wave aus, lockedItems + Renderer-Teaser '🔒 ab Welle N'; Fahrplan Ballista/Explosiv@2, Raketen/DeltaRaptor@3, Minen@4; Gating nur in der Anzeige, purchase unverändert. (B) Werft-Event: neue Konstanten WERFT; planet.ts Planet.kind + PlanetKind; siege.ts (SiegeMissile/createSiege/updateSiege); world.ts WerftEvent + Felder werft/werftDone/siege/atShipyard, startWerftEvent/updateWerftEvent/launchSiege/nextPlanetKind, updatePlanets ersetzt updatePlanetSpawns, updateLanding sperrt bei aktivem Event + setzt atShipyard, interceptSiege im Kollisionsschritt. shop.ts shipyardOnly (Titan) + visibleItems-Gating (Titan/Upgrades nur atShipyard). renderer.ts drawShipyardRing, drawSiege, drawWerftHud + kind-abhängiges Planet-Label + Leerseiten-Hinweis 'Nur in der Orbital-Werft'. Tests 201->213 (werft.test 10 neu, shop.test +5, bestehender Upgrade-Test auf atShipyard umgestellt). tsc strict grün. Offscreen verifiziert.",
     "v1.17": "Gegner-Basen Etappe 9 — Plasmaflak-Modul (REQ-BASE-03). base.ts: BaseModule.fireTimer? optional; createBase wählt Nicht-Kern-Module gewichtet (shield/flak/Panzerung). constants.ts: BASE.flakModuleChance + BASE.flak {fireCooldown,bulletSpeed,bulletLife,bulletRadius,damage,range,muzzleGap}. world.ts: updateBaseWeapons + fireFlak (Doppellauf senkrecht versetzt) in updateBases, Bolzen -> world.enemyBullets, Reichweiten-Gate. renderer.ts drawBase: Flak-Module bernsteinfarben mit rotierendem Doppellauf-Hub. 3 neue Unit-Tests (feuert auf Schiff / kein Flak feuert nicht / zerstörtes Flak feuert nicht). Tests 195->198, tsc strict grün.",
     "v1.18": "Gegner-Basen Etappe 10 — Hangar-Modul (REQ-BASE-04), Basen-Feature-Set komplett. base.ts: BaseModule.spawnTimer? optional; createBase erweitert die gewichtete Typwahl um 'hangar'. constants.ts: BASE.hangarModuleChance + BASE.hangar {cooldown 6.0, maxFighters 4, launchSpeed 90}; shield/flak-Chancen leicht gesenkt (0.3/0.28) fuer Platz. world.ts: launchFighter (createEnemy 'fighter' Richtung Schiff) + hangar-Zweig in updateBaseWeapons (spawnTimer runter, Start bei <=0 sofern enemies.length < maxFighters). renderer.ts drawBase: Hangar-Module goldener Gradient/Rand + Startbucht-Trapez mit blinkender Leitlinie. 3 neue Unit-Tests (startet Jaeger / respektiert Cap / zerstoert startet nichts). Tests 198->201, tsc strict gruen. Offscreen-Render bestaetigt Flak/Hangar/Schild-Faerbung.",
     "v1.18.1": "Basen-Renderer-Bugfix (Nutzer-Feedback), keine Logik-/Teständerung (201/201). renderer.ts drawBase komplett überarbeitet: hexPath(mult) mit Skalierung; ALLE Module teilen jetzt denselben warmen Metall-Körper (Gradient #33/#4c bzw. Kern rötlich) statt je Typ vollflächig cyan/amber/gold eingefärbt zu werden -> Mehr-Hex-Basen wirken wie Cluster der schönen Einzel-Basis; Waffenmodule nur noch mit farbigem Akzent-Rand (flak amber / hangar gold) + Emblem. Schild jetzt UNMISSVERSTÄNDLICH: cyan Energiebarriere (hexPath 1.07 Fill+heller Rand + innerer Shimmer 0.82) ueber Schildgenerator UND jedem geschuetzten Modul (Bedingung isShield||shielded), plus hellerer Emitter-Crest. Behebt drei gemeldete Punkte: (1) Look-Inkonsistenz Einzel- vs. Mehr-Hex, (3) unsichtbares Schild, und damit (2) 'Laser wirkt nicht' = geschuetzte Module absorbieren Treffer korrekt, war nur nicht sichtbar. Offscreen-Render (PNG) bestaetigt.",
@@ -54,9 +55,9 @@
   },
   "testStatus": {
     "lastRun": "2026-07-13",
-    "summary": "alle Tests grün (198/198); TypeScript strict typecheck ohne Fehler. GROSSER UMBAU v1.19 (Nutzerwunsch): die Hex-Modul-Basen wurden durch drei große GEGNER-SCHLACHTSCHIFFE ersetzt — A Dreadnought (Twin-Kanone+Schild), B Mandibel-Räuber (Streuschuss, Kernauge, kein Schild), C Werft-Festung (Flak+Hangar+Schild). Ein Lebensbalken pro Schiff (kein Modul-Zerlegen mehr), passende Waffen je Design, Schild als blaue Rumpf-Linie wie beim Spielerschiff. base.ts/constants.ts/world.ts/renderer.ts + Tests komplett auf das neue Modell umgestellt (base.test 6, world.test Basis-Blöcke neu). Verifiziert per Offscreen-Render (Galerie der 3 Schiffe + Kampfszene: Laser sichtbar, Schild-Linie, Lebensbalken, Schild absorbiert 2 Treffer).",
-    "total": 198,
-    "passed": 198,
+    "summary": "alle Tests grün (213/213); TypeScript strict typecheck ohne Fehler. NEU v1.20 (Nutzerwunsch): (A) Progressiver Shop-Unlock (REQ-SHOP-05) — Items schalten nach Welle frei (unlockWave), gesperrte als ausgegraute '🔒 ab Welle N'-Teaser. (B) Titan-Werft-Verteidigung (REQ-WERFT-01) — ab Welle 5 einmaliges Sonder-Level: Shipyard-Planet driftet in die Mitte, wird von langsamen Belagerungsraketen (neue Entität siege.ts) beschossen; abfangen mit Projektilen; Werft-Schadensbalken, bei 0 scheitert das Event (kommt neu), sonst gewonnen -> Titan an der Werft kaufbar. Danach ~1/3 der Planeten sind Werften; Titan + Upgrades NUR dort (shipyardOnly/atShipyard-Gating). Verifiziert per Unit-Tests (werft.test 10, shop.test +5) + Offscreen-Render (Werft-Ring/HUD amber 3281 im HUD-Band, Raketen rot 586; Kontroll-Render normaler Planet 308/0).",
+    "total": 213,
+    "passed": 213,
     "failed": 0,
     "typecheck": "pass",
     "command": "npm test"
@@ -908,6 +909,62 @@
         "a boss asteroid has high hp and a large radius",
         "a boss splits into several large asteroids",
         "destroying a boss awards its score and drops loot"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHOP-05",
+      "title": "Progressiver Shop-Unlock nach Welle",
+      "category": "economy",
+      "priority": "should",
+      "description": "Der Shop schaltet seine Artikel nach und nach frei: jedes Item hat ein optionales unlockWave (Standard 1) und ist erst ab dieser Welle kaufbar. Noch gesperrte Items erscheinen als ausgegraute 'ab Welle N'-Teaser. Gating passiert nur in der Anzeige (visibleItems/lockedItems), nicht in purchase.",
+      "acceptanceCriteria": [
+        "ShopItem.unlockWave (optional, Default 1); visibleItems blendet Items mit unlockWave > world.wave aus.",
+        "Freischalt-Fahrplan: Vulkan/AP/Extra-Leben/Antigrav ab Welle 1, Ballista/Explosiv ab 2, Raketen/Delta Raptor ab 3, Minen ab 4.",
+        "lockedItems liefert die noch wave-gesperrten Items einer Seite (ohne Upgrades/Titan) für die ausgegraute Teaser-Darstellung.",
+        "purchase prüft die Welle NICHT (reine Transaktion); die Gate-Logik liegt allein in der Anzeige.",
+        "Der Renderer zeichnet gesperrte Items ausgegraut mit '🔒 ab Welle N' statt Preis (nicht anwählbar)."
+      ],
+      "testFile": "test/shop.test.ts",
+      "tests": [
+        "reveals weapons only from their unlock wave on",
+        "reveals ammo packs one wave at a time",
+        "keeps the Delta Raptor hidden until its unlock wave"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-WERFT-01",
+      "title": "Titan-Werft-Verteidigung (Sonder-Level) & Werft-Planeten",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Der Titan wird nicht mehr im normalen Shop verkauft, sondern nur in der Orbital-Werft eines Planeten. Ab WERFT.eventWave erscheint einmalig ein Sonder-Level: ein von einer Werft umkreister Planet driftet in die Bildschirmmitte und wird von langsam anfliegenden Belagerungsraketen (neue Gegnerart) beschossen, die auf ihm explodieren. Der Spieler fängt die Raketen mit Projektilen ab. Die Werft hat einen Schadensbalken (WERFT.shipyardHp); Einschläge senken ihn, bei 0 scheitert das Event und erscheint später erneut. Ist die Raketenwelle abgewehrt, ist die Verteidigung gewonnen (werftDone) und der Planet wird landbar — dort ist der Titan kaufbar. Danach trägt ~jeder dritte Planet (WERFT.spawnChance) eine Werft; Titan UND Titan-Upgrades sind nur an Werft-Planeten verfügbar.",
+      "acceptanceCriteria": [
+        "Planet.kind ('normal' | 'shipyard'); Shipyard-Planeten verkaufen den Titan.",
+        "Ab WERFT.eventWave und solange nicht gewonnen, ersetzt startWerftEvent den nächsten Planet-Spawn: ein Shipyard-Planet driftet aus einem Rand in die Mitte (Phase 'approach') und hält dort (Phase 'defend').",
+        "Während des Events (world.werft != null) ist kein Landen möglich.",
+        "Belagerungsraketen (world.siege, siege.ts) starten von den Rändern auf den Planeten zu (WERFT.siegeSpeed), explodieren bei Kontakt am Planeten und senken die Werft-HP um 1.",
+        "Spieler-Projektile (Bullets/Raketen/Minen) fangen Belagerungsraketen ab (interceptSiege) und geben Score/Credits (WERFT.siegeScore/siegeCredits).",
+        "Werft-HP <= 0: Event scheitert, Planet verschwindet, werftDone bleibt false, Retry nach PLANET.interval.",
+        "Alle Raketen abgefangen (toLaunch 0 und keine in der Luft) bei HP > 0: werftDone = true, der Shipyard-Planet driftet wieder los (landbar).",
+        "Landen auf einem Shipyard-Planeten setzt world.atShipyard; visibleItems zeigt den Titan (shipyardOnly) und die Upgrades nur bei atShipyard (Upgrades zusätzlich nur mit besessenem Titan).",
+        "Nach werftDone spawnen Planeten mit WERFT.spawnChance als Shipyard (nextPlanetKind).",
+        "Renderer: Shipyard-Planet mit rotierendem Werft-Ring + Label, Belagerungsraketen mit Warnglühen, Verteidigungs-HUD (Banner + Werft-Schadensbalken + Rest-Raketen)."
+      ],
+      "testFile": "test/werft.test.ts, test/shop.test.ts",
+      "tests": [
+        "triggers at the event wave with an approaching shipyard planet",
+        "does not trigger before the event wave (normal planet instead)",
+        "drifts to the centre and switches to the defend phase",
+        "blocks landing while the shipyard is still under siege",
+        "intercepts a siege missile with a bullet, scoring credits",
+        "wins once every missile is dealt with, handing the shipyard back to drift",
+        "fails when the shipyard's damage bar is depleted",
+        "opens a shipyard shop (Titan available) when landing on a shipyard planet",
+        "marks the shop as normal (no Titan) when landing on a normal planet",
+        "spawns shipyard planets (~1/3) only after the defense is won",
+        "hides the Titan in a normal shop and shows it at a shipyard",
+        "hides Titan upgrades away from a shipyard even when the Titan is owned"
       ],
       "status": "passing"
     }

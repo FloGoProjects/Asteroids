@@ -70,6 +70,65 @@ describe("shop pages", () => {
   });
 });
 
+// REQ-SHOP-05: items unlock progressively as the waves advance
+describe("progressive unlock by wave", () => {
+  it("reveals weapons only from their unlock wave on", () => {
+    const w = newWorld(); // wave 1
+    expect(w.wave).toBe(1);
+    expect(visibleItems(w, "weapon").map((i) => i.id)).toEqual(["vulkan"]);
+    w.wave = 2;
+    expect(visibleItems(w, "weapon").map((i) => i.id)).toEqual(["vulkan", "ballista"]);
+  });
+
+  it("reveals ammo packs one wave at a time", () => {
+    const w = newWorld(); // wave 1
+    expect(visibleItems(w, "ammo").map((i) => i.id)).toEqual(["ammo-ap"]);
+    w.wave = 2;
+    expect(visibleItems(w, "ammo").map((i) => i.id)).toEqual(["ammo-ap", "ammo-explosive"]);
+    w.wave = 3;
+    expect(visibleItems(w, "ammo").map((i) => i.id)).toEqual([
+      "ammo-ap",
+      "ammo-explosive",
+      "ammo-rocket",
+    ]);
+    w.wave = 4;
+    expect(visibleItems(w, "ammo").map((i) => i.id)).toEqual([
+      "ammo-ap",
+      "ammo-explosive",
+      "ammo-rocket",
+      "ammo-mine",
+    ]);
+  });
+
+  it("keeps the Delta Raptor hidden until its unlock wave", () => {
+    const w = newWorld(); // wave 1
+    expect(visibleItems(w, "ship").map((i) => i.id)).not.toContain("ship-deltaRaptor");
+    w.wave = 3;
+    expect(visibleItems(w, "ship").map((i) => i.id)).toContain("ship-deltaRaptor");
+  });
+});
+
+// REQ-WERFT-01: the Titan is only offered at shipyard planets
+describe("shipyard-gated Titan", () => {
+  it("hides the Titan in a normal shop and shows it at a shipyard", () => {
+    const w = newWorld();
+    w.wave = 9; // waves don't gate the Titan
+    w.atShipyard = false;
+    expect(visibleItems(w, "ship").map((i) => i.id)).not.toContain("ship-titan");
+    w.atShipyard = true;
+    expect(visibleItems(w, "ship").map((i) => i.id)).toContain("ship-titan");
+  });
+
+  it("hides Titan upgrades away from a shipyard even when the Titan is owned", () => {
+    const w = newWorld();
+    w.ownedShips.push("titan");
+    w.atShipyard = false;
+    expect(visibleItems(w, "upgrade").map((i) => i.id)).toEqual([]);
+    w.atShipyard = true;
+    expect(visibleItems(w, "upgrade").length).toBeGreaterThan(0);
+  });
+});
+
 describe("purchasing", () => {
   it("buys a weapon: deducts credits, adds ownership, auto-equips", () => {
     const w = newWorld();
@@ -262,8 +321,9 @@ describe("equipment purchases", () => {
 });
 
 describe("Titan upgrades", () => {
-  it("hides upgrades until the Titan is owned, then shows them", () => {
+  it("hides upgrades until the Titan is owned at a shipyard, then shows them", () => {
     const w = newWorld();
+    w.atShipyard = true; // upgrades are shipyard-gated. REQ-WERFT-01
     expect(visibleItems(w, "upgrade").map((i) => i.id)).toEqual([]);
     w.ownedShips.push("titan");
     expect(visibleItems(w, "upgrade").map((i) => i.id)).toEqual([
