@@ -11,7 +11,7 @@ import {
   isOwned,
   isEquipped,
 } from "../src/game/shop.ts";
-import { WEAPONS, AMMO, SHIPS, GAME, EQUIPMENT, ROCKET, MINE, SHIELD } from "../src/game/constants.ts";
+import { WEAPONS, AMMO, SHIPS, GAME, EQUIPMENT, ROCKET, MINE, SHIELD, WINGMAN } from "../src/game/constants.ts";
 
 const item = (id: string) => {
   const found = SHOP_ITEMS.find((i) => i.id === id);
@@ -420,13 +420,21 @@ describe("Titan upgrades", () => {
     expect(w.shipUpgrades).toContain("tractor");
   });
 
-  it("buying the hangar installs it on the Titan", () => {
+  it("levels the hangar up to 3 drones, then refuses at max", () => {
     const w = newWorld();
     w.credits = 20000;
     purchase(w, item("ship-titan"));
-    const r = purchase(w, item("upgrade-hangar"));
-    expect(r).toBe("ok");
-    expect(w.shipUpgrades).toContain("hangar");
+    const hangar = item("upgrade-hangar");
+    expect(purchase(w, hangar)).toBe("ok"); // level 1
+    expect(w.hangarLevel).toBe(1);
+    expect(isOwned(w, hangar)).toBe(false); // not maxed -> still buyable
+    expect(purchase(w, hangar)).toBe("ok"); // level 2
+    expect(purchase(w, hangar)).toBe("ok"); // level 3 (max)
+    expect(w.hangarLevel).toBe(WINGMAN.maxLevel);
+    expect(isOwned(w, hangar)).toBe(true);
+    const credits = w.credits;
+    expect(purchase(w, hangar)).toBe("owned"); // no further purchase
+    expect(w.credits).toBe(credits);
   });
 
   it("refuses to buy an already-installed upgrade", () => {

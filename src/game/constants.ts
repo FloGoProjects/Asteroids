@@ -112,7 +112,7 @@ export const UPGRADES: Record<UpgradeId, UpgradeSpec> = {
     id: "hangar",
     name: "Hangar",
     price: 3000,
-    desc: "Zwei Wingman-Drohnen fliegen mit & feuern selbst",
+    desc: "Begleitjäger · Stufe 1–3 = 1–3 Drohnen, feuern selbst",
   },
 };
 
@@ -134,7 +134,7 @@ export const TITAN_UPGRADE = {
 
 /** Deflector-pulse upgrade: a periodic shockwave that clears nearby enemy fire. REQ-SHIP-05. */
 export const DEFLECTOR = {
-  interval: 4.0, // seconds between pulses
+  interval: 6.0, // seconds between pulses
   radius: 210, // shockwave reach (px): enemy bullets inside are vaporised
   flashTime: 0.4, // seconds the expanding ring is drawn (render)
   enemyDamage: 1, // damage dealt to enemies caught in the pulse
@@ -153,16 +153,17 @@ export const AUTOCANNON = {
 
 /** Hangar upgrade: friendly wingman drones that fly in formation and auto-fire. REQ-SHIP-05. */
 export const WINGMAN = {
-  count: 2, // drones launched
+  maxLevel: 3, // hangar levels 1..3 -> that many drones (world.hangarLevel)
   offsets: [
-    { x: -8, y: -40 },
-    { x: -8, y: 40 },
-  ], // formation slots in hull-local space (+x = nose)
+    { x: -8, y: -42 },
+    { x: -8, y: 42 },
+    { x: -30, y: 0 },
+  ], // formation slots in hull-local space (+x = nose), one per drone level
   follow: 5, // formation steering smoothing (per second)
   snapDist: 260, // teleport to the slot if it falls this far behind (handles screen wrap)
-  range: 330, // engages enemies within this distance (enemies only, not asteroids)
+  range: 330, // engages threats within this distance (enemies + battleships, not asteroids)
   engageDist: 120, // how far from the ship a drone advances toward its target
-  engageSpread: 26, // lateral offset so the two drones flank the target
+  engageSpread: 26, // lateral offset so the drones flank the target
   cooldown: 0.7, // seconds between drone shots
   damage: 1,
   bulletSpeed: 560,
@@ -548,4 +549,20 @@ export const WERFT = {
   siegeScore: 60, // score for intercepting a missile
   siegeCredits: 45, // credits for intercepting a missile
   spawnChance: 0.34, // ~every third planet carries a shipyard (after the event)
+};
+
+// --- Hunter missiles (post-event siege rockets that now chase the player). REQ-WERFT-02. --
+// Once the shipyard-defense is beaten, siege-style rockets keep appearing, but now they
+// home in on the ship and accelerate the longer they chase. Intercept them like event missiles.
+export const HUNTER = {
+  firstDelay: 8, // seconds after the event before the first hunter appears
+  interval: 11, // seconds between hunter spawns
+  maxAlive: 3, // cap on simultaneous hunters
+  startSpeed: 70, // initial approach speed (px/s)
+  accel: 26, // px/s^2 — they speed up while chasing
+  maxSpeed: 300, // top chase speed (px/s)
+  turnRate: 1.8, // rad/s homing steer
+  life: 22, // seconds before it gives up and fizzles
+  score: 90,
+  credits: 70,
 };

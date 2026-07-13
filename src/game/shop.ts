@@ -15,6 +15,7 @@ import {
   SHOP,
   UPGRADES,
   UPGRADE_ORDER,
+  WINGMAN,
   WeaponId,
   AmmoId,
   ShipId,
@@ -198,7 +199,11 @@ export type PurchaseResult = "ok" | "equipped" | "insufficient" | "owned" | "max
 export function isOwned(world: World, item: ShopItem): boolean {
   if (item.kind === "weapon") return world.ownedWeapons.includes(item.ref as WeaponId);
   if (item.kind === "ship") return world.ownedShips.includes(item.ref as ShipId);
-  if (item.kind === "upgrade") return world.shipUpgrades.includes(item.ref as UpgradeId);
+  if (item.kind === "upgrade") {
+    // the hangar levels up (1..3 drones) — "owned" only once maxed. REQ-SHIP-05
+    if (item.ref === "hangar") return world.hangarLevel >= WINGMAN.maxLevel;
+    return world.shipUpgrades.includes(item.ref as UpgradeId);
+  }
   // The shield is a levelling subsystem: "owned" (no longer buyable) only once maxed out. REQ-EQUIP-01.
   if (item.kind === "equipment" && item.ref === "shield") return world.ship.shieldLevel >= SHIELD.maxLevel;
   return false;
@@ -208,7 +213,10 @@ export function isOwned(world: World, item: ShopItem): boolean {
 export function isEquipped(world: World, item: ShopItem): boolean {
   if (item.kind === "weapon") return world.weapon === item.ref;
   if (item.kind === "ship") return world.shipId === item.ref;
-  if (item.kind === "upgrade") return world.shipUpgrades.includes(item.ref as UpgradeId);
+  if (item.kind === "upgrade") {
+    if (item.ref === "hangar") return world.hangarLevel >= WINGMAN.maxLevel; // show price until maxed
+    return world.shipUpgrades.includes(item.ref as UpgradeId);
+  }
   // Show the shield as "equipped" only at max level; below that it still displays a price to level up.
   if (item.kind === "equipment" && item.ref === "shield") return world.ship.shieldLevel >= SHIELD.maxLevel;
   return false;

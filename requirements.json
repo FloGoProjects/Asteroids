@@ -45,7 +45,8 @@
     "v1.14": "Titan-Rebalance + Upgrade-System (REQ-SHIP-05, Etappe 1+2). Nerf: shieldCapacity 3->1, 3->2 Türme, deutlich langsamer (turnSpeed 2.4->1.6, thrust 220->140, maxSpeed 300->200). Upgrade-Fundament: constants UpgradeId/UPGRADES/UPGRADE_ORDER/TITAN_UPGRADE; world.shipUpgrades + installShipUpgrade; equipShip berechnet Titan-Werte aus Basis+Upgrades (idempotent). Erstes Upgrade Schildgenerator (+3 Schild). Shop: neue Seite 'UPGRADES' (SHOP_PAGES erweitert), nur mit Titan sichtbar (sonst Hinweis), kind 'upgrade'. Renderer: Schildkuppel am Heck bei installiertem Upgrade (drawShip bekommt upgrades-Param), Shop-Icon, Tab-Label, Leerseiten-Hinweis; main.ts Nav-Guard gegen leere Seite. GEPLANT (nächste Etappen): Triebwerke, Autogeschütz, Traktorstrahl, Hangar; danach modulare Gegner-Basen (mehrere 6-Ecke: Schildgen/Hangar/Plasmaflak).",
     "v1.13.1": "Bugfix Schiffwechsel im Shop: der Shop unterschied nicht zwischen 'besessen' und 'ausgerüstet' -> jedes besessene Schiff zeigte AUSGERÜSTET und purchase gab 'owned' zurück, ein Wechsel war unmöglich. Neu isEquipped() (shop.ts); purchase re-equippt ein besessenes, nicht aktives Schiff/Waffe kostenlos (Result 'equipped'), nur das aktive zeigt AUSGERÜSTET, die übrigen 'WECHSELN'. Renderer nutzt isEquipped statt isOwned für das Label + WECHSELN-Zeile. Verifiziert per Unit-Tests + Offscreen-fillText-Spy (AUSGERÜSTET beim aktiven, WECHSELN beim anderen Schiff).",
     "v1.13": "Drittes Schiff 'Titan' (Schlachtschiff) mit maus-gezielten Türmen (REQ-SHIP-04). Neuer ShipSpec-Felder shieldCapacity + turrets (TurretMount[]). Träge Flugwerte, 3 Ladungen eingebaute Schilde, 3 Türme. Maus-Eingabe: keyboard.ts trackt Zeiger als Input.aim + linke Maustaste feuert (kombiniert mit Leertaste). world.ts: aimAngle aus Input.aim, fireWeapon feuert aus jeder Turmmündung entlang aimAngle (Ammo einmal pro Salve), equipShip überträgt Türme + stuft Schild monoton hoch. Renderer: drawTitanBody (Rumpf + zur Maus schwenkende Läufe), Shop-Icon, drawShip bekommt aimAngle. Shop-Item ship-titan (6500 CR). Verifiziert: 5 neue Unit-Tests + sichtbarkeits-unabhängige Offscreen-Pixelchecks (Turm-Mündung folgt Zielpunkt, Schiff/Icon rendern). HINWEIS: kein Live-Screenshot möglich (Browser-Pane hidden -> rAF pausiert).",
-    "future": "Weitere Ideen: mehr Schiffe/Waffen/Gegnertypen, Highscore/Persistenz (localStorage), Soundeffekte/Musik.",
+    "future": "Weitere Ideen: mehr Schiffe/Waffen/Gegnertypen, Highscore/Persistenz (localStorage), Soundeffekte/Musik. OFFEN (Nutzerwunsch, in Diskussion): mehr Event-Typen (z.B. 'Schütze den Konvoi') + überarbeitetes Belohnungssystem.",
+    "v1.24": "Kampf-Erweiterungen (Nutzer-Feedback). (A) DEFLECTOR.interval 4->6s. (B) REQ-WERFT-02 Jäger-Raketen: nach werftDone spawnt updateHunters homing-Raketen (SiegeMissile.homing/speed/life, HUNTER-Konstanten), die das Schiff verfolgen und beschleunigen, das Schiff schädigen und per interceptSiege abfangbar sind (HUNTER.score/credits). (C) Raketen & Wingman greifen Schlachtschiffe an: acquireTarget/isTargetAlive schließen world.bases ein; nearestEnemyInRange -> nearestThreatInRange (enemies+bases) in updateWingmen. (D) Hangar dreistufig: world.hangarLevel 1..3 (WINGMAN.count->maxLevel, 3. Formations-Offset); installShipUpgrade/isOwned/isEquipped für hangar level-basiert; updateWingmen nutzt hangarLevel als Drohnenzahl, Flanken zentriert; Shop-Zeile + HUD zeigen Level. Tests 221->227 (rocket-homes-battleship, wingmen-engage-battleships, hangar-level-count, 3x hunter). tsc strict grün.",
     "v1.23": "Titan-Upgrade 'Schildgenerator' -> 'Deflektor-Puls' umgebaut (Nutzer-Feedback: shieldGen war seit dem Schild-Level-System redundant). UpgradeId shieldGen->deflector; UPGRADES/UPGRADE_ORDER/Shop-Item upgrade-deflector; TITAN_UPGRADE.shieldGenBonus entfernt; neue Konstante DEFLECTOR (interval 4s, radius 210, knockback 260, enemyDamage 1, flashTime 0.4). ship.deflectorCooldown/deflectorFlash. world.updateDeflector: periodischer Puls vernichtet enemyBullets im Radius + stoesst/schaedigt Gegner (hitEnemy). equipShip setzt Titan-Schild nicht mehr per shieldGen hoch (nur noch max(built-in, aktueller shieldMax)). renderer: Heck-Emitter-Coil statt Kuppel, drawDeflectorPulse (expandierender Ring, in render() bei deflectorFlash>0), Shop-Icon = konzentrische Ringe. Tests 219->221 (shop: 'buying the deflector pulse installs it', vier shieldGen-Bloecke umgestellt; world: 'vaporises nearby enemy bullets', 'damages and pushes a nearby enemy'). tsc strict gruen, offscreen verifiziert (Puls-Ring Annulus-Helligkeit +221k, Shop-Name 'Deflektor-Puls').",
     "v1.22": "Politur nach Nutzer-Feedback. (1) Explosivmunition fliegt als kleines Geschoss (renderer.ts drawBullet: 42px-Aura entfernt, jetzt kleiner Schell mit Orange-Körper + heißem Kern); die 'Explosion' passiert erst bei Detonation über das bereits vorhandene onExplosion(false)-Partikelburst. (2) Traktorstrahl fasst nicht mehr alle kleinen Asteroiden gleichzeitig an: updateTractor(world,dt) zieht nur den nächsten heran, zerlegt ihn und pausiert TRACTOR.cooldown (0.7s, ship.tractorCooldown) vor dem nächsten; Loot-Zug unverändert. Tests 218->219 (neuer world.test 'shatters only one small asteroid at a time'). tsc strict grün.",
     "v1.21": "Balance nach Nutzer-Feedback (REQ-BASE-01, REQ-EQUIP-01). (1) Schlachtschiffe erst ab Welle 3 (BASE.fromWave 2->3) und wellenskaliert: baseChanceForWave (BASE.chance 0.2 Start, +chancePerWave 0.12/Welle, max 0.6) + baseCapForWave (1 früh .. max 3) in world.ts spawnEnemy -> anfangs sehr wenige, später mehr. (2) Schild-Level 1..3: SHIELD.rechargeDelay 6->12 (langsamer), neue SHIELD.rechargeByLevel [12,8,5] + maxLevel; ship.shieldLevel; grantShield hebt Level (max 3), lädt voll, senkt nie größere Titan-Kapazität; shieldRechargeDelay(ship) steuert Nachladen (updateShip) + Reset nach Treffer (damageShip) + equipShip. Schild nicht mehr zufällig (SHOP.randomEquipment ohne equip-shield), ab Welle 3 verlässlich kaufbar, mehrfach bis Level-Max. HUD 'SCHILD Lx', Shop-Zeile 'Level x/3'. Tests 216->218 (world.test Basis-Wellen-Gate, shop.test Schild-Level + Recharge). tsc strict grün, offscreen verifiziert (HUD 'SCHILD L2', Shop 'Level: 2/3').",
@@ -59,8 +60,8 @@
   "testStatus": {
     "lastRun": "2026-07-13",
     "summary": "alle Tests grün (216/216); TypeScript strict typecheck ohne Fehler. NEU v1.20 (Nutzerwunsch): (A) Progressiver Shop-Unlock (REQ-SHOP-05) — Items schalten nach Welle frei (unlockWave), gesperrt wird nur das NÄCHSTE Unlock je Seite als ausgegrauter '🔒 ab Welle N'-Teaser angezeigt (kein Zumüllen); Schild erst ab Welle 3. (B) Titan-Werft-Verteidigung (REQ-WERFT-01) — ab Welle 5 einmaliges Sonder-Level: Shipyard-Planet driftet in die Mitte, wird von langsamen Belagerungsraketen (neue Entität siege.ts) beschossen; abfangen mit Projektilen; Werft-Schadensbalken, bei 0 scheitert das Event (kommt neu), sonst gewonnen -> Titan an der Werft kaufbar. Danach ~1/3 der Planeten sind Werften; Titan + Upgrades NUR dort (shipyardOnly/atShipyard-Gating); der UPGRADES-Tab (visiblePages) erscheint nur an Werft-Planeten. Verifiziert per Unit-Tests (werft.test 10, shop.test-Gruppen) + Offscreen-Render (Werft-Ring/HUD, Tab-Spy: normal 4 Tabs, Werft 5 Tabs).",
-    "total": 221,
-    "passed": 221,
+    "total": 227,
+    "passed": 227,
     "failed": 0,
     "typecheck": "pass",
     "command": "npm test"
@@ -536,7 +537,7 @@
         "Triebwerke: erhöhen thrust/maxSpeed/turnSpeed des Titan (TITAN_UPGRADE.engine*).",
         "Autogeschütz: ein zusätzlicher Turm (ship.hasAutocannon) zielt automatisch auf das nächste Ziel in AUTOCANNON.range und feuert ohne Spielereingabe im AUTOCANNON.cooldown; hält Feuer, wenn kein Ziel in Reichweite ist.",
         "Traktorstrahl: zieht IMMER NUR den nächsten kleinen Asteroiden in TRACTOR.range heran (nicht alle gleichzeitig), zerlegt ihn am Rumpf für ein Vielfaches (TRACTOR.absorbCreditMult) seiner Credits und pausiert danach TRACTOR.cooldown (ship.tractorCooldown), bevor der nächste drankommt; zieht nahes Loot unabhängig davon weiter heran.",
-        "Hangar: startet WINGMAN.count freundliche Drohnen (world.wingmen), die dauerhaft in Formation neben dem Titan fliegen (steerWingman, snappt bei Screen-Wrap). Sie greifen NUR Gegner an (nearestEnemyInRange, ignorieren Asteroiden), brechen bei einem Ziel aus der Formation aus und fliegen ein Stück auf den Gegner zu (WINGMAN.engageDist, flankierend). Sie können von Gegner-Projektilen abgeschossen werden und respawnen nach WINGMAN.respawn Sekunden (world.wingmanRespawn). Beim Verlassen des Titan werden sie entlassen.",
+        "Hangar: DREISTUFIG (world.hangarLevel 1..WINGMAN.maxLevel = 1..3 Drohnen; mehrfach kaufbar bis Level 3, dann owned). Die Drohnen fliegen dauerhaft in Formation neben dem Titan (steerWingman, snappt bei Screen-Wrap) und greifen Gegner UND große Schlachtschiffe an (nearestThreatInRange über enemies+bases, ignorieren Asteroiden), brechen bei einem Ziel aus der Formation aus und flankieren es (WINGMAN.engageDist, zentriert über die aktive Drohnenzahl). Sie können von Gegner-Projektilen abgeschossen werden und respawnen nach WINGMAN.respawn Sekunden. Beim Verlassen des Titan werden sie entlassen. HUD/Shop zeigen den Hangar-Level.",
         "Ein installiertes Upgrade bleibt beim Schiffwechsel erhalten und wird beim Zurückwechseln zum Titan erneut angewandt (Werte werden aus Basis + Upgrades neu berechnet, nicht kumulativ).",
         "Installierte Upgrades werden am Titan-Rumpf gezeichnet (Deflektor-Puls = Emitter-Coil am Heck + expandierender Schockwellen-Ring beim Puls, Triebwerke = leuchtende Düsen, Autogeschütz = schwenkender Turm auf dem Vorderdeck, Traktorstrahl = Emitter-Schale + violettes Zugfeld, Hangar = Startbuchten + mitfliegende Drohnen); Shop-Icons vorhanden."
       ],
@@ -554,7 +555,9 @@
         "the tractor beam reels in a small asteroid and shatters it for bonus credits",
         "shatters only one small asteroid at a time, then waits out a cooldown",
         "the tractor beam pulls nearby loot toward the ship",
-        "buying the hangar installs it on the Titan",
+        "levels the hangar up to 3 drones, then refuses at max",
+        "launches one wingman per hangar level",
+        "wingmen engage battleships, not only fighters",
         "the hangar upgrade launches wingmen that fly along and auto-fire",
         "wingmen are dismissed when leaving the Titan",
         "wingmen ignore asteroids and only fire at enemies",
@@ -833,6 +836,7 @@
         "Gleichzeitig lebende Schlachtschiffe sind auf baseCapForWave(wave) begrenzt (1 früh, bis 3 in späteren Wellen); vor BASE.fromWave erscheint stattdessen eine normale Station.",
         "hitBases prüft einen einzelnen Hüllen-Kreis (radius); Direkttreffer verbrauchen das Projektil, Explosivtreffer schädigen alle Hüllen im Radius.",
         "isBaseDead = hp<=0; retireDeadBases vergibt BATTLESHIPS[design].score/credits, Explosion + dropLoot.",
+        "Zielsuchende Raketen (acquireTarget/isTargetAlive schließen world.bases ein) und Hangar-Drohnen (nearestThreatInRange über enemies+bases) erfassen und bekämpfen Schlachtschiffe wie andere Gegner.",
         "Renderer zeichnet je Design einen eigenen Rumpf mit einem Lebensbalken über dem Schiff."
       ],
       "testFile": "test/base.test.ts, test/world.test.ts",
@@ -844,7 +848,8 @@
         "a player bullet damages a battleship hull",
         "destroying a battleship removes it, awards credits and drops loot",
         "from wave 3 (BASE.fromWave) a station spawn can be a battleship",
-        "does not spawn battleships before BASE.fromWave (a station spawns instead)"
+        "does not spawn battleships before BASE.fromWave (a station spawns instead)",
+        "a fired rocket homes onto and damages a battleship"
       ],
       "status": "passing"
     },
@@ -976,6 +981,26 @@
         "spawns shipyard planets (~1/3) only after the defense is won",
         "hides the Titan in a normal shop and shows it at a shipyard",
         "hides Titan upgrades away from a shipyard even when the Titan is owned"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-WERFT-02",
+      "title": "Jäger-Raketen nach dem Werft-Event",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Nachdem die Werft-Verteidigung gewonnen ist (world.werftDone), tauchen die kleinen Belagerungsraketen weiter auf, greifen jetzt aber den Spieler an: sie verfolgen das Schiff (Homing mit HUNTER.turnRate) und werden dabei immer schneller (HUNTER.startSpeed -> HUNTER.maxSpeed via HUNTER.accel). Sie werden wie die Event-Raketen von Spieler-Projektilen abgefangen (interceptSiege).",
+      "acceptanceCriteria": [
+        "Erst ab world.werftDone (und wenn kein aktives Event läuft) spawnt updateHunters alle HUNTER.interval Sekunden eine Rakete von einem Rand, bis HUNTER.maxAlive gleichzeitig leben.",
+        "Homing-Raketen (SiegeMissile.homing=true) drehen mit begrenzter Rate zum Schiff und beschleunigen pro Frame (m.speed bis HUNTER.maxSpeed).",
+        "Erreicht eine Rakete das verwundbare Schiff, detoniert sie und kostet Schild/Leben (damageShip); nach HUNTER.life Sekunden zerfällt sie von selbst.",
+        "Abgefangene Jäger-Raketen geben HUNTER.score/credits (Event-Raketen weiter WERFT.siege*); Rendering nutzt drawSiege wie die Event-Raketen."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "spawns homing hunter missiles after the shipyard-defense is won",
+        "a hunter missile accelerates while chasing an invulnerable ship",
+        "a hunter missile that reaches a vulnerable ship costs a life"
       ],
       "status": "passing"
     }

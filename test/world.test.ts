@@ -17,6 +17,7 @@ import { createEnemy } from "../src/game/enemy.ts";
 import { createLoot } from "../src/game/loot.ts";
 import { createBullet } from "../src/game/bullet.ts";
 import { createBattleship } from "../src/game/base.ts";
+import { createSiege } from "../src/game/siege.ts";
 import { vec, length } from "../src/engine/vector2.ts";
 import {
   SHIP,
@@ -37,6 +38,7 @@ import {
   SHIELD,
   ROCKET,
   MINE,
+  HUNTER,
 } from "../src/game/constants.ts";
 
 const IDLE = { turnLeft: false, turnRight: false, thrust: false, fire: false, fireSecondary: false };
@@ -973,26 +975,108 @@ describe("Titan battleship", () => {
     expect(survivor.velocity.x).toBeGreaterThan(0); // knocked outward (+x)
   });
 
+  // REQ-BASE-01: rockets and wingmen must also engage the big battleships
+  it("a fired rocket homes onto and damages a battleship", () => {
+    const w = createWorld({ width: 1200, height: 1200, seed: 1, asteroids: 0 });
+    w.ship.invuln = 999;
+    w.rocketAmmo = 3;
+    w.secondary = "rocket";
+    const base = createBattleship("mandible", vec(w.ship.position.x, w.ship.position.y - 300), vec(0, 0));
+    const hp0 = base.hp; // mandible carries no shield -> hull takes the hit directly
+    w.bases.push(base);
+    updateWorld(w, { ...IDLE, fireSecondary: true }, 1 / 120); // launch a rocket
+    expect(w.rockets.length).toBe(1);
+    for (let i = 0; i < 260; i++) updateWorld(w, IDLE, 1 / 120);
+    expect(base.hp).toBeLessThan(hp0); // rocket steered into the hull
+  });
+
+  it("wingmen engage battleships, not only fighters", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ownedShips.push("titan");
+    w.hangarLevel = 1;
+    equipShip(w, "titan");
+    w.ship.invuln = 999;
+    const base = createBattleship("mandible", vec(w.ship.position.x + 120, w.ship.position.y), vec(0, 0));
+    const hp0 = base.hp;
+    w.bases.push(base);
+    for (let i = 0; i < 80; i++) updateWorld(w, IDLE, 0.05);
+    expect(base.hp).toBeLessThan(hp0); // a drone fired on the battleship
+  });
+
+  // REQ-SHIP-05: hangar level = drone count
+  it("launches one wingman per hangar level", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ownedShips.push("titan");
+    equipShip(w, "titan");
+    w.hangarLevel = 1;
+    updateWorld(w, IDLE, 0.05);
+    expect(w.wingmen.length).toBe(1);
+    w.hangarLevel = 3;
+    updateWorld(w, IDLE, 0.05);
+    expect(w.wingmen.length).toBe(3);
+  });
+
+  // REQ-WERFT-02: post-event hunter missiles chase the ship
+  it("spawns homing hunter missiles after the shipyard-defense is won", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.werftDone = true;
+    w.werft = null;
+    w.hunterTimer = 0;
+    updateWorld(w, IDLE, 0.02);
+    expect(w.siege.some((m) => m.homing)).toBe(true);
+  });
+
+  it("a hunter missile accelerates while chasing an invulnerable ship", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.werftDone = true;
+    w.werft = null;
+    w.ship.invuln = 999; // so it can't be consumed and keeps homing
+    w.hunterTimer = 0;
+    updateWorld(w, IDLE, 0.02); // spawn one
+    const s0 = w.siege.find((m) => m.homing)!.speed;
+    for (let i = 0; i < 40; i++) updateWorld(w, IDLE, 0.05);
+    const m = w.siege.find((x) => x.homing);
+    expect(m && m.speed).toBeGreaterThan(s0); // sped up over time
+  });
+
+  it("a hunter missile that reaches a vulnerable ship costs a life", () => {
+    const w = createWorld({ width: 400, height: 400, seed: 1, asteroids: 0 });
+    w.werftDone = true;
+    w.werft = null;
+    w.hunterTimer = 999; // don't spawn more this test
+    w.ship.invuln = 0;
+    w.ship.shield = 0;
+    w.ship.shieldMax = 0;
+    const lives0 = w.lives;
+    w.siege.push(createSiege({ ...w.ship.position }, vec(0, HUNTER.startSpeed), true, HUNTER.life));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.lives).toBe(lives0 - 1);
+  });
+
   it("the hangar upgrade launches wingmen that fly along and auto-fire", () => {
     const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
     w.ownedShips.push("titan");
-    w.shipUpgrades.push("hangar");
+    w.hangarLevel = WINGMAN.maxLevel;
     equipShip(w, "titan");
     const e = createEnemy(vec(w.ship.position.x + 120, w.ship.position.y), vec(0, 0), "fighter");
     e.fireTimer = 999;
     w.enemies.push(e);
     updateWorld(w, IDLE, 0.05);
-    expect(w.wingmen.length).toBe(WINGMAN.count);
+    expect(w.wingmen.length).toBe(WINGMAN.maxLevel);
     expect(w.bullets.length).toBeGreaterThan(0); // the drones opened fire
   });
 
   it("wingmen are dismissed when leaving the Titan", () => {
     const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
     w.ownedShips.push("titan");
-    w.shipUpgrades.push("hangar");
+    w.hangarLevel = WINGMAN.maxLevel;
     equipShip(w, "titan");
     updateWorld(w, IDLE, 0.05);
-    expect(w.wingmen.length).toBe(WINGMAN.count);
+    expect(w.wingmen.length).toBe(WINGMAN.maxLevel);
     equipShip(w, "vanguard"); // owned from the start
     updateWorld(w, IDLE, 0.05);
     expect(w.wingmen.length).toBe(0);
@@ -1001,32 +1085,32 @@ describe("Titan battleship", () => {
   it("wingmen ignore asteroids and only fire at enemies", () => {
     const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
     w.ownedShips.push("titan");
-    w.shipUpgrades.push("hangar");
+    w.hangarLevel = WINGMAN.maxLevel;
     equipShip(w, "titan");
     w.ship.invuln = 999;
     w.asteroids.push(createAsteroid(vec(w.ship.position.x + 90, w.ship.position.y), vec(0, 0), "small"));
     for (let i = 0; i < 5; i++) updateWorld(w, IDLE, 0.05);
-    expect(w.wingmen.length).toBe(WINGMAN.count);
+    expect(w.wingmen.length).toBe(WINGMAN.maxLevel);
     expect(w.bullets.length).toBe(0); // no enemy in range -> drones hold fire
   });
 
   it("a wingman shot down by an enemy bullet respawns after a delay", () => {
     const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
     w.ownedShips.push("titan");
-    w.shipUpgrades.push("hangar");
+    w.hangarLevel = WINGMAN.maxLevel;
     equipShip(w, "titan");
     w.ship.invuln = 999;
     for (let i = 0; i < 20; i++) updateWorld(w, IDLE, 0.05); // settle into formation
-    expect(w.wingmen.length).toBe(WINGMAN.count);
+    expect(w.wingmen.length).toBe(WINGMAN.maxLevel);
     const wm = w.wingmen[0];
     w.enemyBullets.push(createBullet({ ...wm.position }, vec(0, 0), 5, ENEMY.bulletRadius, 1));
     updateWorld(w, IDLE, 1 / 240); // tiny step so the drone barely moves before impact
-    expect(w.wingmen.length).toBe(WINGMAN.count - 1);
+    expect(w.wingmen.length).toBe(WINGMAN.maxLevel - 1);
     expect(w.wingmanRespawn.length).toBe(1);
     // ride out the respawn delay
     const steps = Math.ceil(WINGMAN.respawn / 0.05) + 3;
     for (let i = 0; i < steps; i++) updateWorld(w, IDLE, 0.05);
-    expect(w.wingmen.length).toBe(WINGMAN.count);
+    expect(w.wingmen.length).toBe(WINGMAN.maxLevel);
     expect(w.wingmanRespawn.length).toBe(0);
   });
 });

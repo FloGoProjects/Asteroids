@@ -46,6 +46,7 @@ import {
   MINE,
   SHOP,
   WERFT,
+  HUNTER,
   LootKind,
   SecondaryId,
   WEAPONS,
@@ -98,7 +99,8 @@ export interface World {
   planetTimer: number; // seconds until the next planet appears
   werft: WerftEvent | null; // active Titan shipyard-defense event (REQ-WERFT-01)
   werftDone: boolean; // true once the defense has been won (shipyards may now spawn)
-  siege: SiegeMissile[]; // in-flight siege missiles attacking the shipyard
+  siege: SiegeMissile[]; // in-flight siege / hunter missiles
+  hunterTimer: number; // seconds until the next player-hunting missile spawns (post-event). REQ-WERFT-02
   atShipyard: boolean; // the shop currently open was reached at a shipyard planet
   enemies: Enemy[]; // hostile fighters
   enemyBullets: Bullet[]; // projectiles fired by enemies
@@ -137,6 +139,7 @@ export interface World {
   shipId: ShipId; // equipped ship model
   ownedShips: ShipId[]; // ships the player owns
   shipUpgrades: UpgradeId[]; // installed Titan upgrades (applied while flying the Titan)
+  hangarLevel: number; // hangar upgrade tier 0..WINGMAN.maxLevel (that many wingman drones). REQ-SHIP-05
   /** Presentation hooks (render layer only, not part of game logic). */
   onExplosion?: (pos: Vec, big: boolean) => void;
   onHit?: (pos: Vec) => void; // asteroid damaged but not destroyed
@@ -184,6 +187,7 @@ export function createWorld(opts: WorldOptions): World {
     werft: null,
     werftDone: false,
     siege: [],
+    hunterTimer: HUNTER.firstDelay,
     atShipyard: false,
     enemies: [],
     enemyBullets: [],
@@ -221,6 +225,7 @@ export function createWorld(opts: WorldOptions): World {
     shipId: "vanguard",
     ownedShips: ["vanguard"],
     shipUpgrades: [],
+    hangarLevel: 0,
   };
   if (world.wavesEnabled) {
     spawnWaveAsteroids(world); // wave 1
@@ -361,6 +366,69 @@ function updatePlanets(world: World, dt: number): void {
       else spawnPlanet(world);
     }
   }
+}
+
+/** Spawn one player-hunting missile from a random edge, aimed at the ship. REQ-WERFT-02. */
+function spawnHunter(world: World): void {
+  const rng = world.rng;
+  const side = Math.floor(rng.next() * 4);
+  let p: Vec;
+  if (side === 0) p = vec(rng.range(0, world.width), -20);
+  else if (side === 1) p = vec(world.width + 20, rng.range(0, world.height));
+  else if (side === 2) p = vec(rng.range(0, world.width), world.height + 20);
+  else p = vec(-20, rng.range(0, world.height));
+  const dir = normalize(sub(world.ship.position, p));
+  world.siege.push(createSiege(p, scale(dir, HUNTER.startSpeed), true, HUNTER.life));
+}
+
+/**
+ * Post-event hunter missiles (REQ-WERFT-02): once the shipyard-defense is beaten the siege
+ * rockets keep coming, but now they home in on the ship and accelerate the longer they chase.
+ * Player projectiles still intercept them (see interceptSiege).
+ */
+function updateHunters(world: World, dt: number): void {
+  if (!world.werftDone || world.werft) return; // only after the event is won (and no active event)
+  const alive = world.siege.reduce((n, m) => n + (m.homing ? 1 : 0), 0);
+  world.hunterTimer -= dt;
+  if (world.hunterTimer <= 0) {
+    if (alive < HUNTER.maxAlive) spawnHunter(world);
+    world.hunterTimer = HUNTER.interval;
+  }
+  const survivors: SiegeMissile[] = [];
+  for (const m of world.siege) {
+    if (!m.homing) {
+      survivors.push(m);
+      continue;
+    }
+    // steer toward the ship (limited turn rate) and accelerate
+    const desired = Math.atan2(
+      world.ship.position.y - m.position.y,
+      world.ship.position.x - m.position.x,
+    );
+    const cur = Math.atan2(m.velocity.y, m.velocity.x);
+    let diff = desired - cur;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    const turn = Math.max(-HUNTER.turnRate * dt, Math.min(HUNTER.turnRate * dt, diff));
+    m.speed = Math.min(HUNTER.maxSpeed, m.speed + HUNTER.accel * dt);
+    m.velocity = fromAngle(cur + turn, m.speed);
+    m.position = add(m.position, scale(m.velocity, dt));
+    m.life -= dt;
+    if (
+      shipVulnerable(world) &&
+      distance(m.position, world.ship.position) <= world.ship.radius + m.radius
+    ) {
+      world.onExplosion?.(m.position, false);
+      damageShip(world); // strikes the ship
+      continue; // consumed
+    }
+    if (m.life <= 0) {
+      world.onExplosion?.(m.position, false); // fizzles out
+      continue;
+    }
+    survivors.push(m);
+  }
+  world.siege = survivors;
 }
 
 /** Spawn the next, stronger wave once the field is cleared. REQ-WAVE-01. */
@@ -631,7 +699,7 @@ function acquireTarget(
   const minDot = Math.cos(coneHalf);
   let best: Targetable | null = null;
   let bestDist = Infinity;
-  const candidates: Targetable[] = [...world.enemies, ...world.asteroids];
+  const candidates: Targetable[] = [...world.enemies, ...world.asteroids, ...world.bases];
   for (const t of candidates) {
     const dx = t.position.x - from.x;
     const dy = t.position.y - from.y;
@@ -650,6 +718,7 @@ function acquireTarget(
 function isTargetAlive(world: World, t: Targetable): boolean {
   for (const e of world.enemies) if (e === t) return true;
   for (const a of world.asteroids) if (a === t) return true;
+  for (const b of world.bases) if (b === t) return true; // rockets can chase battleships too. REQ-BASE-01
   return false;
 }
 
@@ -860,8 +929,8 @@ function interceptSiege(
   }
   if (downed.size) {
     for (const m of downed) {
-      world.score += WERFT.siegeScore;
-      world.credits += WERFT.siegeCredits;
+      world.score += m.homing ? HUNTER.score : WERFT.siegeScore;
+      world.credits += m.homing ? HUNTER.credits : WERFT.siegeCredits;
       world.onExplosion?.(m.position, false);
     }
     world.siege = world.siege.filter((m) => !downed.has(m));
@@ -933,9 +1002,13 @@ export function equipShip(world: World, id: ShipId): void {
   }
 }
 
-/** Install a Titan upgrade and re-apply it if the Titan is currently flown. REQ-SHIP-05. */
+/** Install (or level up) a Titan upgrade and re-apply it if the Titan is currently flown. REQ-SHIP-05. */
 export function installShipUpgrade(world: World, id: UpgradeId): void {
-  if (!world.shipUpgrades.includes(id)) world.shipUpgrades.push(id);
+  if (id === "hangar") {
+    world.hangarLevel = Math.min(WINGMAN.maxLevel, world.hangarLevel + 1); // 1..3 drones
+  } else if (!world.shipUpgrades.includes(id)) {
+    world.shipUpgrades.push(id);
+  }
   if (world.shipId === "titan") equipShip(world, "titan");
 }
 
@@ -1094,36 +1167,42 @@ function updateDeflector(world: World, dt: number): void {
   world.shake = Math.max(world.shake, 0.25);
 }
 
-/** Hangar upgrade: keep friendly wingmen in formation and let them auto-fire. REQ-SHIP-05. */
-/** Nearest hostile enemy within `range` of `from` (wingmen ignore asteroids). REQ-SHIP-05. */
-function nearestEnemyInRange(world: World, from: Vec, range: number): Enemy | null {
-  let best: Enemy | null = null;
+/** Nearest hostile threat within `range`: fighters/stations OR battleships (wingmen ignore asteroids). REQ-SHIP-05. */
+function nearestThreatInRange(
+  world: World,
+  from: Vec,
+  range: number,
+): { position: Vec; radius: number } | null {
+  let best: { position: Vec; radius: number } | null = null;
   let bestDist = range;
-  for (const e of world.enemies) {
-    const d = distance(e.position, from);
+  for (const t of [...world.enemies, ...world.bases]) {
+    const d = distance(t.position, from);
     if (d < bestDist) {
       bestDist = d;
-      best = e;
+      best = t;
     }
   }
   return best;
 }
 
-/** First formation slot (0..count-1) not currently taken by a live wingman, or -1. */
+/** First formation slot (0..level-1) not currently taken by a live wingman, or -1. */
 function firstFreeWingmanSlot(world: World): number {
   const used = new Set(world.wingmen.map((wm) => wm.slot));
-  for (let s = 0; s < WINGMAN.count; s++) if (!used.has(s)) return s;
+  for (let s = 0; s < world.hangarLevel; s++) if (!used.has(s)) return s;
   return -1;
 }
 
-/** Hangar wingmen: fly formation, break off toward enemies, fire only at enemies, respawn if downed. REQ-SHIP-05. */
+/** Hangar wingmen (1..3 by hangar level): fly formation, break off toward threats, respawn if downed. REQ-SHIP-05. */
 function updateWingmen(world: World, dt: number): void {
-  const active = world.shipId === "titan" && world.shipUpgrades.includes("hangar");
+  const active = world.shipId === "titan" && world.hangarLevel > 0;
   if (!active) {
     if (world.wingmen.length) world.wingmen = [];
     if (world.wingmanRespawn.length) world.wingmanRespawn = [];
     return;
   }
+
+  // If the hangar level dropped (shouldn't in normal play) trim drones to fit.
+  world.wingmen = world.wingmen.filter((wm) => wm.slot < world.hangarLevel);
 
   // Tick respawn timers; relaunch a drone into a free slot when its timer elapses.
   if (world.wingmanRespawn.length) {
@@ -1135,28 +1214,29 @@ function updateWingmen(world: World, dt: number): void {
       world.wingmen.push(createWingman(slot, world.ship.position));
     }
   }
-  // Initial launch (right after install): fill remaining capacity immediately.
-  while (world.wingmen.length + world.wingmanRespawn.length < WINGMAN.count) {
+  // Initial launch (right after install/level up): fill remaining capacity immediately.
+  while (world.wingmen.length + world.wingmanRespawn.length < world.hangarLevel) {
     const slot = firstFreeWingmanSlot(world);
     if (slot < 0) break;
     world.wingmen.push(createWingman(slot, world.ship.position));
   }
 
   const ship = world.ship;
-  // A single shared target so both drones converge on (and flank) the same threat.
-  const enemy = nearestEnemyInRange(world, ship.position, WINGMAN.range);
+  // A single shared target so the drones converge on (and flank) the same threat — enemies OR battleships.
+  const threat = nearestThreatInRange(world, ship.position, WINGMAN.range);
+  const mid = (world.hangarLevel - 1) / 2; // centre the flanking spread across the active drones
   for (const wm of world.wingmen) {
     if (wm.fireTimer > 0) wm.fireTimer -= dt;
     let target: Vec;
-    if (enemy) {
-      // break formation and advance a bit toward the enemy, flanking it
-      const dir = normalize(sub(enemy.position, ship.position));
+    if (threat) {
+      // break formation and advance a bit toward the threat, flanking it
+      const dir = normalize(sub(threat.position, ship.position));
       const perp = vec(-dir.y, dir.x);
-      const dist = distance(enemy.position, ship.position);
-      const lead = Math.max(0, Math.min(dist - enemy.radius - 20, WINGMAN.engageDist));
-      const lateral = wm.slot === 0 ? -WINGMAN.engageSpread : WINGMAN.engageSpread;
+      const dist = distance(threat.position, ship.position);
+      const lead = Math.max(0, Math.min(dist - threat.radius - 20, WINGMAN.engageDist));
+      const lateral = (wm.slot - mid) * WINGMAN.engageSpread;
       target = add(add(ship.position, scale(dir, lead)), scale(perp, lateral));
-      wm.angle = Math.atan2(enemy.position.y - wm.position.y, enemy.position.x - wm.position.x);
+      wm.angle = Math.atan2(threat.position.y - wm.position.y, threat.position.x - wm.position.x);
       if (wm.fireTimer <= 0) {
         const velocity = fromAngle(wm.angle, WINGMAN.bulletSpeed);
         world.bullets.push(
@@ -1224,6 +1304,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
 
   // Planet drift/spawn + Titan shipyard-defense event (REQ-PLANET-01, REQ-WERFT-01)
   updatePlanets(world, dt);
+
+  // Post-event hunter missiles chase the ship (REQ-WERFT-02)
+  updateHunters(world, dt);
 
   // Landing on the planet opens the shop (REQ-LAND-01)
   updateLanding(world, dt);

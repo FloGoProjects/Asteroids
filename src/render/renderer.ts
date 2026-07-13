@@ -2161,6 +2161,12 @@ export class Renderer {
             px + panelW - 30,
             y + rowH / 2 + 16,
           );
+        } else if (item.ref === "hangar") {
+          ctx.fillText(
+            `Level: ${world.hangarLevel}/${WINGMAN.maxLevel}`,
+            px + panelW - 30,
+            y + rowH / 2 + 16,
+          );
         }
       }
     });
