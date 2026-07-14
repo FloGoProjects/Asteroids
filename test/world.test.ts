@@ -47,6 +47,7 @@ import {
   REWARD,
   BOUNTY,
   CONVOY,
+  WERFT,
 } from "../src/game/constants.ts";
 
 const IDLE = { turnLeft: false, turnRight: false, thrust: false, fire: false, fireSecondary: false };
@@ -1140,6 +1141,31 @@ describe("Titan battleship", () => {
     expect(w.enemies.length).toBe(0); // killed
     expect(w.credits).toBe(credits0 + CONVOY.raiderCredits); // small payout, not the full fighter value
     expect(w.loot.length).toBe(0); // event raiders drop no loot
+  });
+
+  it("prioritises the Titan shipyard event at its wave, pausing other events until beaten", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.wave = WERFT.eventWave; // 5
+    w.werftDone = false;
+    w.bountyTimer = 0;
+    w.convoyTimer = 0;
+    updateWorld(w, IDLE, 0.02);
+    expect(w.bases.some((b) => b.elite)).toBe(false); // bounty suppressed
+    expect(w.convoyActive).toBe(false); // convoy suppressed
+  });
+
+  it("starts the Titan shipyard event even with a normal battleship present", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.wave = WERFT.eventWave;
+    w.planet = null;
+    w.planetTimer = 0;
+    w.bases.push(createBattleship("mandible", vec(500, 350), vec(0, 0)));
+    updateWorld(w, IDLE, 0.016);
+    expect(w.werft).not.toBeNull(); // shipyard event started despite the battleship
   });
 
   it("no new event starts while a battleship is on the field", () => {

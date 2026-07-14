@@ -406,7 +406,10 @@ function updatePlanets(world: World, dt: number): void {
   } else {
     world.planetTimer -= dt;
     if (world.planetTimer <= 0) {
-      if (!world.werftDone && world.wavesEnabled && world.wave >= WERFT.eventWave && !eventBlocking(world))
+      // The Titan shipyard event only defers to another ACTIVE event (convoy / bounty elite),
+      // not to ordinary battleships — so it reliably appears at its wave. REQ-WERFT-03
+      const otherEventActive = world.convoyActive || world.bases.some((b) => b.elite);
+      if (!world.werftDone && world.wavesEnabled && world.wave >= WERFT.eventWave && !otherEventActive)
         startWerftEvent(world);
       else spawnPlanet(world);
     }
@@ -709,9 +712,18 @@ function eventBlocking(world: World): boolean {
   return world.werft !== null || world.convoyActive || world.bases.length > 0;
 }
 
+/**
+ * From WERFT.eventWave until it is beaten, the Titan-unlock shipyard event takes priority:
+ * the other timed events pause so it actually gets its window (the Titan gates later progress). REQ-WERFT-03.
+ */
+function titanEventPending(world: World): boolean {
+  return !world.werftDone && world.wave >= WERFT.eventWave;
+}
+
 /** Tick the bounty-elite timer and spawn one (only one at a time) from BOUNTY.fromWave. REQ-EVENT-01. */
 function updateBounty(world: World, dt: number): void {
   if (!world.wavesEnabled || world.wave < BOUNTY.fromWave) return;
+  if (titanEventPending(world)) return; // let the Titan shipyard event come first. REQ-WERFT-03
   if (eventBlocking(world)) return; // no overlapping events / while a battleship is present
   world.bountyTimer -= dt;
   if (world.bountyTimer <= 0) {
@@ -783,7 +795,12 @@ function updateConvoy(world: World, dt: number): void {
   if (world.convoyBanner > 0) world.convoyBanner = Math.max(0, world.convoyBanner - dt);
 
   if (!world.convoyActive) {
-    if (world.wavesEnabled && world.wave >= CONVOY.fromWave && !eventBlocking(world)) {
+    if (
+      world.wavesEnabled &&
+      world.wave >= CONVOY.fromWave &&
+      !titanEventPending(world) && // let the Titan shipyard event come first. REQ-WERFT-03
+      !eventBlocking(world)
+    ) {
       world.convoyTimer -= dt;
       if (world.convoyTimer <= 0) spawnConvoy(world);
     }
