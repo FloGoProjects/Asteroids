@@ -140,6 +140,8 @@ export interface World {
   rocketAmmo: number; // rockets the player can still fire
   mineAmmo: number; // mines the player can still deploy
   secondaryCooldown: number; // seconds until the next rocket/mine can launch
+  salvoQueue: { angle: number; target: Targetable | null }[]; // cruiser swarm still to launch. REQ-SHIP-07
+  salvoTimer: number; // seconds until the next queued swarm rocket launches
   landProgress: number; // seconds the ship has held on the planet (0..landTime)
   landLock: boolean; // true after a shop visit until the ship leaves the planet
   shopIndex: number; // currently highlighted shop row (UI navigation)
@@ -240,6 +242,8 @@ export function createWorld(opts: WorldOptions): World {
     rocketAmmo: 0,
     mineAmmo: 0,
     secondaryCooldown: 0,
+    salvoQueue: [],
+    salvoTimer: 0,
     landProgress: 0,
     landLock: false,
     shopIndex: 0,
@@ -1318,6 +1322,7 @@ export function equipShip(world: World, id: ShipId): void {
   world.ship.maxSpeed = spec.maxSpeed;
   world.secondary = spec.secondary; // secondary weapon is ship-bound now (no toggle). REQ-SHIP-06
   world.ship.turrets = (spec.turrets ?? []).map((t) => ({ ...t }));
+  world.salvoQueue = []; // drop any pending swarm when switching ships. REQ-SHIP-07
   if (id === "cruiser") world.ship.produceTimer = CRUISER.produceInterval; // start forging. REQ-SHIP-07
   world.ship.hasAutocannon = id === "titan" && world.shipUpgrades.includes("autocannon");
 
@@ -1414,24 +1419,63 @@ function nearestTargetInRange(world: World, from: Vec, range: number): Targetabl
 }
 
 /** Autocannon upgrade: an extra turret that auto-aims at the nearest target and fires. REQ-SHIP-05. */
+/** Up to `max` nearest enemy/asteroid/battleship targets inside a forward cone from `from`. */
+function acquireTargets(
+  world: World,
+  from: Vec,
+  heading: number,
+  coneHalf: number,
+  max: number,
+): Targetable[] {
+  const hx = Math.cos(heading);
+  const hy = Math.sin(heading);
+  const minDot = Math.cos(coneHalf);
+  const inCone: { t: Targetable; d: number }[] = [];
+  for (const t of [...world.enemies, ...world.asteroids, ...world.bases]) {
+    const dx = t.position.x - from.x;
+    const dy = t.position.y - from.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 1) continue;
+    if ((dx / d) * hx + (dy / d) * hy < minDot) continue; // not in front
+    inCone.push({ t, d });
+  }
+  inCone.sort((a, b) => a.d - b.d);
+  return inCone.slice(0, max).map((x) => x.t);
+}
+
 /**
- * Missile cruiser salvo: launch several rockets at once in a fan, aimed along the turret
- * (mouse) direction. Each rocket acquires its own target. REQ-SHIP-07.
+ * Missile cruiser salvo: queue a small swarm launched one rocket at a time (CRUISER.salvoGap apart),
+ * distributed across the targets in the zone so multiple enemies get engaged at once. REQ-SHIP-07.
  */
 function fireRocketSalvo(world: World): void {
   const ship = world.ship;
   const n = Math.min(CRUISER.salvoSize, world.rocketAmmo);
+  if (n <= 0) return;
   const baseAngle = ship.turrets.length > 0 ? ship.aimAngle : ship.angle;
+  const nose = add(ship.position, fromAngle(baseAngle, ship.radius));
+  const targets = acquireTargets(world, nose, baseAngle, ROCKET.acquireCone, n);
   for (let i = 0; i < n; i++) {
     const offset = n === 1 ? 0 : (i / (n - 1) - 0.5) * CRUISER.salvoSpread;
-    const angle = baseAngle + offset;
-    const muzzle = add(ship.position, fromAngle(angle, ship.radius));
-    const target = acquireTarget(world, muzzle, angle, ROCKET.acquireCone);
-    world.rockets.push(createRocket(muzzle, angle, target));
+    // round-robin across the available targets so the swarm splits between them
+    const target = targets.length > 0 ? targets[i % targets.length] : null;
+    world.salvoQueue.push({ angle: baseAngle + offset, target });
   }
-  world.rocketAmmo -= n;
+  world.rocketAmmo -= n; // consumed up front
+  world.salvoTimer = 0; // first rocket leaves immediately, the rest ripple out
   world.secondaryCooldown = CRUISER.salvoCooldown;
   world.shake = Math.max(world.shake, 0.3);
+}
+
+/** Release queued cruiser-swarm rockets over time (staggered launch). REQ-SHIP-07. */
+function updateSalvo(world: World, dt: number): void {
+  if (world.salvoQueue.length === 0) return;
+  world.salvoTimer -= dt;
+  while (world.salvoQueue.length > 0 && world.salvoTimer <= 0) {
+    const q = world.salvoQueue.shift() as { angle: number; target: Targetable | null };
+    const muzzle = add(world.ship.position, fromAngle(q.angle, world.ship.radius));
+    world.rockets.push(createRocket(muzzle, q.angle, q.target));
+    world.salvoTimer += CRUISER.salvoGap;
+  }
 }
 
 /**
@@ -1674,8 +1718,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
   // Autocannon upgrade fires on its own at nearby targets (REQ-SHIP-05)
   updateAutocannon(world, dt);
 
-  // Missile cruiser forges its own rockets over time (REQ-SHIP-07)
+  // Missile cruiser forges its own rockets over time + ripples out its swarm (REQ-SHIP-07)
   updateRocketProduction(world, dt);
+  updateSalvo(world, dt);
 
   // Hangar wingmen fly in formation and auto-fire (REQ-SHIP-05)
   updateWingmen(world, dt);

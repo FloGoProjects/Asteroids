@@ -1073,15 +1073,37 @@ describe("Titan battleship", () => {
     expect(w.rocketAmmo).toBe(0);
   });
 
-  it("the cruiser fires a salvo of several rockets at once", () => {
+  it("the cruiser fires a staggered swarm: ammo up front, rockets ripple out one by one", () => {
     const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
     w.ownedShips.push("cruiser");
     equipShip(w, "cruiser");
     w.rocketAmmo = 6;
+    updateWorld(w, { ...IDLE, fireSecondary: true }, 1 / 120); // fire
+    expect(w.rocketAmmo).toBe(6 - CRUISER.salvoSize); // consumed immediately
+    expect(w.rockets.length).toBeLessThan(CRUISER.salvoSize); // NOT all at once
+    expect(w.secondaryCooldown).toBeGreaterThan(0);
+    // ride out the swarm gaps -> all rockets released
+    const steps = Math.ceil((CRUISER.salvoGap * CRUISER.salvoSize) / 0.02) + 4;
+    for (let i = 0; i < steps; i++) updateWorld(w, IDLE, 0.02);
+    expect(w.rockets.length).toBe(CRUISER.salvoSize);
+  });
+
+  it("splits the swarm across multiple targets in the zone", () => {
+    const w = createWorld({ width: 1000, height: 800, seed: 1, asteroids: 0 });
+    w.ownedShips.push("cruiser");
+    equipShip(w, "cruiser");
+    w.ship.angle = 0;
+    w.ship.aimAngle = 0; // facing +x
+    w.rocketAmmo = 6;
+    const a = createEnemy(vec(w.ship.position.x + 260, w.ship.position.y - 40), vec(0, 0), "fighter");
+    const b = createEnemy(vec(w.ship.position.x + 260, w.ship.position.y + 40), vec(0, 0), "fighter");
+    a.fireTimer = b.fireTimer = 999;
+    w.enemies.push(a, b);
     updateWorld(w, { ...IDLE, fireSecondary: true }, 1 / 120);
-    expect(w.rockets.length).toBe(CRUISER.salvoSize); // a volley, not a single rocket
-    expect(w.rocketAmmo).toBe(6 - CRUISER.salvoSize);
-    expect(w.secondaryCooldown).toBeGreaterThan(0); // salvo cooldown started
+    const steps = Math.ceil((CRUISER.salvoGap * CRUISER.salvoSize) / 0.02) + 2;
+    for (let i = 0; i < steps; i++) updateWorld(w, IDLE, 0.02);
+    const targets = new Set(w.rockets.map((r) => r.target));
+    expect(targets.size).toBeGreaterThanOrEqual(2); // both enemies engaged
   });
 
   it("a salvo never fires more rockets than are loaded", () => {

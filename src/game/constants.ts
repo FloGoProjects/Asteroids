@@ -165,9 +165,10 @@ export const TITAN_UPGRADE = {
  */
 export const CRUISER = {
   magazine: 8, // auto-production tops the rocket pool up to this many
-  produceInterval: 3.5, // seconds to forge one rocket
-  salvoSize: 3, // rockets launched per salvo
-  salvoSpread: 0.42, // radians: fan across the salvo
+  produceInterval: 2.0, // seconds to forge one rocket (faster regen)
+  salvoSize: 4, // rockets launched per salvo — a small swarm
+  salvoGap: 0.07, // seconds between each rocket of the swarm (staggered, not simultaneous)
+  salvoSpread: 0.25, // radians: slight launch fan so they don't start on top of each other
   salvoCooldown: 1.1, // seconds between salvos
 };
 
