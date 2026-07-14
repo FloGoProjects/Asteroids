@@ -46,6 +46,7 @@
     "v1.13.1": "Bugfix Schiffwechsel im Shop: der Shop unterschied nicht zwischen 'besessen' und 'ausgerüstet' -> jedes besessene Schiff zeigte AUSGERÜSTET und purchase gab 'owned' zurück, ein Wechsel war unmöglich. Neu isEquipped() (shop.ts); purchase re-equippt ein besessenes, nicht aktives Schiff/Waffe kostenlos (Result 'equipped'), nur das aktive zeigt AUSGERÜSTET, die übrigen 'WECHSELN'. Renderer nutzt isEquipped statt isOwned für das Label + WECHSELN-Zeile. Verifiziert per Unit-Tests + Offscreen-fillText-Spy (AUSGERÜSTET beim aktiven, WECHSELN beim anderen Schiff).",
     "v1.13": "Drittes Schiff 'Titan' (Schlachtschiff) mit maus-gezielten Türmen (REQ-SHIP-04). Neuer ShipSpec-Felder shieldCapacity + turrets (TurretMount[]). Träge Flugwerte, 3 Ladungen eingebaute Schilde, 3 Türme. Maus-Eingabe: keyboard.ts trackt Zeiger als Input.aim + linke Maustaste feuert (kombiniert mit Leertaste). world.ts: aimAngle aus Input.aim, fireWeapon feuert aus jeder Turmmündung entlang aimAngle (Ammo einmal pro Salve), equipShip überträgt Türme + stuft Schild monoton hoch. Renderer: drawTitanBody (Rumpf + zur Maus schwenkende Läufe), Shop-Icon, drawShip bekommt aimAngle. Shop-Item ship-titan (6500 CR). Verifiziert: 5 neue Unit-Tests + sichtbarkeits-unabhängige Offscreen-Pixelchecks (Turm-Mündung folgt Zielpunkt, Schiff/Icon rendern). HINWEIS: kein Live-Screenshot möglich (Browser-Pane hidden -> rAF pausiert).",
     "future": "Weitere Ideen: mehr Schiffe/Waffen/Gegnertypen, Highscore/Persistenz (localStorage), Soundeffekte/Musik. Belohnungs-Kisten (REQ-REWARD-01) + zwei Events (Kopfgeld-Elite REQ-EVENT-01, Konvoi-Eskorte REQ-EVENT-02) sind umgesetzt.",
+    "v1.28": "Feedback & Fortschritt (REQ-HUD-01). onToast-Hook + src/render/toasts.ts (aufsteigende Pickup-Texte '3× Raketen', in main.ts verdrahtet); applyLoot/chooseReward melden Menge+Item. world.eventBanner {title,sub,time} bei den drei Event-Starts, Countdown in updateWaves, drawEventBanner zentral. damageShip/loseLife mit Ursache -> world.deathCause (Asteroid/feindliches Feuer/Stationsstrahl/Jäger-Rakete), im Game-Over gezeigt + 'ENTER für Neustart' + Score/Welle. HUD-Welle prominent ('◈ WELLE N'). Tests 239->242. tsc strict grün, offscreen verifiziert.",
     "v1.27": "Event Konvoi-Eskorte (REQ-EVENT-02). Neue freundliche Entität convoy.ts (Freighter). Enemy.hunting ('ship'|'convoy'); updateEnemies feuert für convoy-Raider nicht aufs Schiff. constants CONVOY. world: convoy/convoyActive/convoyTimer/convoyRaiderTimer/convoyDelivered/convoyBanner; spawnConvoy/spawnRaider/nearestFreighter/updateConvoy/resolveConvoy — Frachter driften durch, Raider steuern auf den nächsten Frachter zu und feuern, Gegner-Geschosse beschädigen Frachter, gelieferte zahlen bonusCredits + Kiste am Ende. renderer: drawFreighter + drawConvoyHud. Tests 236->239 (spawn/bullet-damages-freighter/deliver-pays+crate). tsc strict grün, offscreen verifiziert (HUD + Frachter 1668 teal px).",
     "v1.26": "Event Kopfgeld-Elite (REQ-EVENT-01). base.ts: Base.elite/bounty + createEliteBattleship (gebuffte Fortress). constants BOUNTY. world: bountyTimer, spawnBountyElite/updateBounty (ab BOUNTY.fromWave, eine gleichzeitig); retireDeadBases zahlt bounty + garantierte Kiste (REWARD.eliteChance) bei elite. renderer: goldener Puls-Ring in drawBase + drawBountyBanner. Tests 232->236 (base.test Elite-Bauplan; world.test spawn/kein-spawn/kill-zahlt-bounty+kiste). tsc strict grün, offscreen verifiziert (Banner + goldener Ring).",
     "v1.25": "Belohnungssystem: Belohnungs-Kisten 1-von-3 (REQ-REWARD-01). Neue Entität crate.ts; REWARD-Konstanten + RewardKind. world: GameState 'reward', RewardOption, world.crates/rewardChoices/rewardIndex; spawnCrate bei Boss-/Schlachtschiff-Tod; updateCrates (Drift/Despawn/Einsammeln), openReward/rollRewardChoices (RNG-Shuffle, 3 verschiedene)/applyReward/chooseReward. Renderer drawCrate (Geschenk-Box) + drawReward (3-Karten-Overlay). main.ts Reward-Navigation (←/→, 1-3, ENTER). Tests 227->232. tsc strict grün, offscreen verifiziert (Kiste + Overlay 3 Karten).",
@@ -63,8 +64,8 @@
   "testStatus": {
     "lastRun": "2026-07-13",
     "summary": "alle Tests grün (216/216); TypeScript strict typecheck ohne Fehler. NEU v1.20 (Nutzerwunsch): (A) Progressiver Shop-Unlock (REQ-SHOP-05) — Items schalten nach Welle frei (unlockWave), gesperrt wird nur das NÄCHSTE Unlock je Seite als ausgegrauter '🔒 ab Welle N'-Teaser angezeigt (kein Zumüllen); Schild erst ab Welle 3. (B) Titan-Werft-Verteidigung (REQ-WERFT-01) — ab Welle 5 einmaliges Sonder-Level: Shipyard-Planet driftet in die Mitte, wird von langsamen Belagerungsraketen (neue Entität siege.ts) beschossen; abfangen mit Projektilen; Werft-Schadensbalken, bei 0 scheitert das Event (kommt neu), sonst gewonnen -> Titan an der Werft kaufbar. Danach ~1/3 der Planeten sind Werften; Titan + Upgrades NUR dort (shipyardOnly/atShipyard-Gating); der UPGRADES-Tab (visiblePages) erscheint nur an Werft-Planeten. Verifiziert per Unit-Tests (werft.test 10, shop.test-Gruppen) + Offscreen-Render (Werft-Ring/HUD, Tab-Spy: normal 4 Tabs, Werft 5 Tabs).",
-    "total": 239,
-    "passed": 239,
+    "total": 242,
+    "passed": 242,
     "failed": 0,
     "typecheck": "pass",
     "command": "npm test"
@@ -1071,6 +1072,26 @@
         "spawns a convoy from its wave on a timer",
         "an enemy bullet damages a convoy freighter",
         "delivering a freighter pays a bonus and drops a reward crate"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-HUD-01",
+      "title": "Feedback & Fortschritt (Toasts, Event-/Game-Over-Banner)",
+      "category": "ux",
+      "priority": "should",
+      "description": "Mehr Lesbarkeit/Feedback: (1) beim Aufnehmen von Loot ein aufsteigender Toast mit Menge+Item ('3× Raketen'); (2) beim Eventstart ein großes Banner mit Aufgabe; (3) beim Game Over eine kontextuelle Todesursache; (4) die aktuelle Welle prominent im HUD.",
+      "acceptanceCriteria": [
+        "onToast-Hook: applyLoot (und chooseReward) melden Text+Menge; präsentationsseitige Toasts (src/render/toasts.ts, in main.ts verdrahtet) steigen auf und faden aus.",
+        "world.eventBanner {title,sub,time} wird bei startWerftEvent/spawnBountyElite/spawnConvoy gesetzt und in updateWaves heruntergezählt; Renderer zeichnet drawEventBanner zentral.",
+        "damageShip/loseLife nehmen eine Ursache; world.deathCause wird beim tödlichen Treffer gesetzt (Asteroid/feindliches Feuer/Stationsstrahl/Jäger-Rakete) und im Game-Over-Screen angezeigt.",
+        "Die Wellennummer wird prominent im HUD dargestellt (drawHud '◈ WELLE N')."
+      ],
+      "testFile": "test/world.test.ts",
+      "tests": [
+        "shows a pickup toast with the amount",
+        "announces an event when it starts (eventBanner)",
+        "records the cause of death on game over"
       ],
       "status": "passing"
     }

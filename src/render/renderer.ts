@@ -159,6 +159,7 @@ export class Renderer {
       if (boss) this.drawBossBar(ctx, boss.hp / boss.maxHp);
     }
     if (world.state === "playing" && world.waveBanner > 0) this.drawWaveBanner(ctx, world);
+    if (world.state === "playing" && world.eventBanner) this.drawEventBanner(ctx, world);
     if (world.state === "playing" && world.werft) this.drawWerftHud(ctx, world);
     if (world.state === "playing" && world.bases.some((b) => b.elite)) this.drawBountyBanner(ctx);
     if (world.state === "playing" && (world.convoyActive || world.convoyBanner > 0))
@@ -245,6 +246,26 @@ export class Renderer {
     }
 
     ctx.textAlign = "left";
+    ctx.restore();
+  }
+
+  /** Big centered announcement when an event starts (fades over its last second). REQ-HUD. */
+  private drawEventBanner(ctx: CanvasRenderingContext2D, world: World): void {
+    const ev = world.eventBanner;
+    if (!ev) return;
+    const alpha = Math.min(1, ev.time); // fade out over the final second
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#ffca6a";
+    ctx.shadowColor = "#ff7a2e";
+    ctx.shadowBlur = 18;
+    ctx.font = "800 34px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillText(ev.title, this.w / 2, this.h * 0.16);
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = "#e6eef7";
+    ctx.font = "600 19px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillText(ev.sub, this.w / 2, this.h * 0.16 + 34);
     ctx.restore();
   }
 
@@ -1967,12 +1988,12 @@ export class Renderer {
     ctx.shadowColor = "#ffd166";
     ctx.fillText(`◈ ${world.credits} CR`, this.w - 24, 20);
 
-    // wave number (below credits)
-    ctx.fillStyle = "#9fb0c3";
-    ctx.shadowColor = "#9fb0c3";
-    ctx.shadowBlur = 6;
-    ctx.font = "600 15px 'Segoe UI', system-ui, sans-serif";
-    ctx.fillText(`WELLE ${world.wave}`, this.w - 24, 46);
+    // wave number (below credits) — prominent so progress is obvious
+    ctx.fillStyle = COLORS.hud;
+    ctx.shadowColor = COLORS.hud;
+    ctx.shadowBlur = 10;
+    ctx.font = "800 20px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillText(`◈ WELLE ${world.wave}`, this.w - 24, 48);
     ctx.textAlign = "left";
 
     // active weapon + ammo (below score)
@@ -2807,17 +2828,25 @@ export class Renderer {
     ctx.fillStyle = COLORS.danger;
     ctx.shadowColor = COLORS.danger;
     ctx.shadowBlur = 24;
-    ctx.font = "800 72px 'Segoe UI', system-ui, sans-serif";
-    ctx.fillText("GAME OVER", this.w / 2, this.h / 2 - 30);
+    ctx.font = "800 68px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillText("GAME OVER", this.w / 2, this.h / 2 - 46);
+
+    // contextual cause of death
+    if (world.deathCause) {
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = "#ff9a6a";
+      ctx.font = "600 21px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText(`… ${world.deathCause}`, this.w / 2, this.h / 2 + 6);
+    }
 
     ctx.shadowBlur = 8;
     ctx.fillStyle = COLORS.hud;
     ctx.font = "600 24px 'Segoe UI', system-ui, sans-serif";
-    ctx.fillText(`FINAL SCORE  ${world.score}`, this.w / 2, this.h / 2 + 34);
+    ctx.fillText(`FINAL SCORE  ${world.score}  ·  WELLE ${world.wave}`, this.w / 2, this.h / 2 + 48);
 
     ctx.fillStyle = "rgba(230,238,247,0.7)";
     ctx.font = "500 18px 'Segoe UI', system-ui, sans-serif";
-    ctx.fillText("Press  ENTER  to relaunch", this.w / 2, this.h / 2 + 78);
+    ctx.fillText("ENTER  für Neustart", this.w / 2, this.h / 2 + 90);
     ctx.restore();
   }
 }

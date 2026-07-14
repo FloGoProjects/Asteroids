@@ -14,6 +14,7 @@ import {
 import { createKeyboardInput } from "./input/keyboard.ts";
 import { Renderer } from "./render/renderer.ts";
 import { Particles } from "./render/particles.ts";
+import { Toasts } from "./render/toasts.ts";
 import { fromAngle, add } from "./engine/vector2.ts";
 import { AMMO } from "./game/constants.ts";
 import { visiblePages, visibleItems, purchase } from "./game/shop.ts";
@@ -26,6 +27,7 @@ let height = 0;
 let renderer: Renderer;
 let world: World;
 const particles = new Particles();
+const toasts = new Toasts();
 const input = createKeyboardInput();
 
 const LOOT_HUE: Record<string, number> = { shield: 190, antigrav: 275, ammo: 45, rocket: 22, mine: 0 };
@@ -35,6 +37,7 @@ function attachHooks(w: World): void {
   w.onHit = (pos) => particles.emitSpark(pos);
   w.onPickup = (pos, kind) => particles.emitPickup(pos, LOOT_HUE[kind] ?? 190);
   w.onShieldHit = (pos) => particles.emitPickup(pos, 190); // cyan shield spark
+  w.onToast = (text, pos) => toasts.push(text, pos.x, pos.y);
 }
 
 function newGame(): void {
@@ -171,7 +174,9 @@ function frame(now: number): void {
   }
 
   particles.update(dt);
+  toasts.update(dt);
   renderer.render(world, particles, dt);
+  toasts.draw(ctx);
   requestAnimationFrame(frame);
 }
 

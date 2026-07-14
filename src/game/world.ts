@@ -148,6 +148,8 @@ export interface World {
   wavesEnabled: boolean; // auto-spawn next wave when the field is cleared
   waveTimer: number; // seconds counted since the field was cleared
   waveBanner: number; // seconds the "WELLE N" banner is shown (render only)
+  eventBanner: { title: string; sub: string; time: number } | null; // announce an event start (render)
+  deathCause: string; // what killed the player (shown on game over)
   score: number;
   credits: number; // spendable currency earned by destroying asteroids
   lives: number;
@@ -170,6 +172,7 @@ export interface World {
   onLand?: () => void; // shop opened
   onPickup?: (pos: Vec, kind: LootKind) => void; // loot collected
   onShieldHit?: (pos: Vec) => void; // shield absorbed a hit
+  onToast?: (text: string, pos: Vec) => void; // floating "+N item" pickup text
 }
 
 function spawnAsteroid(world: World, size: AsteroidSize = "large"): Asteroid {
@@ -245,6 +248,8 @@ export function createWorld(opts: WorldOptions): World {
     wavesEnabled: opts.asteroids === undefined,
     waveTimer: 0,
     waveBanner: 0,
+    eventBanner: null,
+    deathCause: "",
     score: 0,
     credits: 0,
     lives: opts.lives ?? GAME.startLives,
@@ -303,6 +308,11 @@ function startWerftEvent(world: World): void {
     hpMax: WERFT.shipyardHp,
     toLaunch: WERFT.siegeCount,
     launchTimer: WERFT.siegeFirstDelay,
+  };
+  world.eventBanner = {
+    title: "EVENT: RAKETENANGRIFF",
+    sub: "Fange die anfliegenden Raketen ab und verteidige die Werft!",
+    time: 4.5,
   };
 }
 
@@ -453,7 +463,7 @@ function updateHunters(world: World, dt: number): void {
       distance(m.position, world.ship.position) <= world.ship.radius + m.radius
     ) {
       world.onExplosion?.(m.position, false);
-      damageShip(world); // strikes the ship
+      damageShip(world, "von einer Jäger-Rakete erwischt"); // strikes the ship
       continue; // consumed
     }
     if (m.life <= 0) {
@@ -468,6 +478,10 @@ function updateHunters(world: World, dt: number): void {
 /** Spawn the next, stronger wave once the field is cleared. REQ-WAVE-01. */
 function updateWaves(world: World, dt: number): void {
   if (world.waveBanner > 0) world.waveBanner = Math.max(0, world.waveBanner - dt);
+  if (world.eventBanner) {
+    world.eventBanner.time -= dt;
+    if (world.eventBanner.time <= 0) world.eventBanner = null;
+  }
   if (!world.wavesEnabled) return;
   if (world.asteroids.length > 0) {
     world.waveTimer = 0; // wave still in progress
@@ -595,6 +609,7 @@ export function chooseReward(world: World, index: number): void {
   const opt = world.rewardChoices[index];
   if (!opt) return;
   applyReward(world, opt);
+  world.onToast?.(opt.label, world.ship.position);
   world.rewardChoices = [];
   world.state = "playing";
   world.ship.invuln = Math.max(world.ship.invuln, 0.8);
@@ -627,7 +642,7 @@ function shipVulnerable(world: World): boolean {
 }
 
 /** A hit lands on the ship: the shield absorbs it if charged, else a life is lost. REQ-EQUIP-01. */
-function damageShip(world: World): void {
+function damageShip(world: World, cause = "im Kampf gefallen"): void {
   if (world.ship.shield > 0) {
     world.ship.shield -= 1;
     world.ship.shieldRecharge = shieldRechargeDelay(world.ship);
@@ -635,17 +650,18 @@ function damageShip(world: World): void {
     world.shake = Math.max(world.shake, 0.4);
     world.onShieldHit?.(world.ship.position);
   } else {
-    loseLife(world);
+    loseLife(world, cause);
   }
 }
 
 /** Apply a hit to the ship: lose a life, reset or end the game. */
-function loseLife(world: World): void {
+function loseLife(world: World, cause = "im Kampf gefallen"): void {
   world.lives -= 1;
   world.shake = 0.8;
   world.onExplosion?.(world.ship.position, true);
   if (world.lives <= 0) {
     world.lives = 0;
+    world.deathCause = cause; // shown on the game-over screen
     world.state = "gameover";
   } else {
     resetShip(world);
@@ -677,6 +693,11 @@ function spawnBountyElite(world: World): void {
   const x = fromLeft ? -margin : world.width + margin;
   const vx = (fromLeft ? 1 : -1) * BATTLESHIPS.fortress.speed * 0.8;
   world.bases.push(createEliteBattleship(vec(x, y), vec(vx, 0)));
+  world.eventBanner = {
+    title: "EVENT: KOPFGELD-ELITE",
+    sub: `Zerstöre das Elite-Schlachtschiff für ${BOUNTY.credits} CR Kopfgeld!`,
+    time: 4.5,
+  };
 }
 
 /** Tick the bounty-elite timer and spawn one (only one at a time) from BOUNTY.fromWave. REQ-EVENT-01. */
@@ -702,6 +723,11 @@ function spawnConvoy(world: World): void {
   world.convoyActive = true;
   world.convoyDelivered = 0;
   world.convoyRaiderTimer = CONVOY.raiderInterval;
+  world.eventBanner = {
+    title: "EVENT: KONVOI-ESKORTE",
+    sub: "Beschütze die Frachter vor den Raidern!",
+    time: 4.5,
+  };
 }
 
 /** Spawn a raider fighter (hunts the convoy) from a random edge. */
@@ -859,7 +885,7 @@ function fireStationBeam(world: World, e: Enemy): void {
   const end = add(e.position, fromAngle(e.beamAngle, STATION.beamRange));
   const hitRadius = world.ship.radius + STATION.beamWidth;
   if (segmentHitsCircle(e.position, end, world.ship.position, hitRadius)) {
-    damageShip(world);
+    damageShip(world, "vom Stationsstrahl pulverisiert");
   }
 }
 
@@ -884,21 +910,28 @@ function dropLoot(world: World, pos: Vec): void {
 }
 
 function applyLoot(world: World, kind: LootKind): void {
+  let text: string;
   if (kind === "shield") {
     grantShield(world.ship);
+    text = "Schild aufgeladen";
   } else if (kind === "antigrav") {
     world.ship.antigrav = LOOT.antigravTime;
+    text = "Antigrav-Feld";
   } else if (kind === "rocket") {
     world.rocketAmmo += ROCKET.lootGrant;
+    text = `${ROCKET.lootGrant}× Raketen`;
   } else if (kind === "mine") {
     world.mineAmmo += MINE.lootGrant;
+    text = `${MINE.lootGrant}× Minen`;
   } else {
     world.ammoCounts.ap += LOOT.ammoGrant;
     world.ammoCounts.explosive += LOOT.ammoGrant;
     // If still on plain standard rounds, start using the special ammo just picked up.
     if (world.ammo === "standard") world.ammo = "ap";
+    text = `${LOOT.ammoGrant}× Munition`;
   }
   world.onPickup?.(world.ship.position, kind);
+  world.onToast?.(text, world.ship.position); // "3× Raketen" etc. REQ-HUD
 }
 
 function updateEnemies(world: World, dt: number): void {
@@ -1787,7 +1820,7 @@ export function updateWorld(world: World, input: Input, dt: number): void {
     if (circleHit(world.ship.position, world.ship.radius, b.position, b.radius)) {
       deadEnemyBullets.add(b);
       if (shipVulnerable(world)) {
-        damageShip(world);
+        damageShip(world, "von feindlichem Feuer zerfetzt");
         break;
       }
     }
@@ -1799,7 +1832,7 @@ export function updateWorld(world: World, input: Input, dt: number): void {
   if (shipVulnerable(world)) {
     for (const a of world.asteroids) {
       if (circleHit(world.ship.position, world.ship.radius, a.position, a.radius)) {
-        damageShip(world);
+        damageShip(world, "von einem Asteroiden zerschmettert");
         break;
       }
     }

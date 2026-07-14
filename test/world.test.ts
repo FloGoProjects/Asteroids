@@ -1125,6 +1125,41 @@ describe("Titan battleship", () => {
     expect(w.state).toBe("reward");
   });
 
+  // REQ-HUD: pickup toasts, event banners, death cause
+  it("shows a pickup toast with the amount", () => {
+    const w = createWorld({ width: 400, height: 400, seed: 1, asteroids: 0 });
+    let toast = "";
+    w.onToast = (t) => {
+      toast = t;
+    };
+    w.loot.push(createLoot({ ...w.ship.position }, "rocket"));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(toast).toContain("Raketen");
+  });
+
+  it("announces an event when it starts (eventBanner)", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.wave = BOUNTY.fromWave;
+    w.bountyTimer = 0;
+    updateWorld(w, IDLE, 0.02);
+    expect(w.eventBanner).not.toBeNull();
+    expect(w.eventBanner?.title).toContain("KOPFGELD");
+  });
+
+  it("records the cause of death on game over", () => {
+    const w = createWorld({ width: 400, height: 400, seed: 1, asteroids: 0 });
+    w.lives = 1;
+    w.ship.invuln = 0;
+    w.ship.shield = 0;
+    w.ship.shieldMax = 0;
+    w.asteroids.push(createAsteroid({ ...w.ship.position }, vec(0, 0), "small"));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.state).toBe("gameover");
+    expect(w.deathCause).toContain("Asteroid");
+  });
+
   // REQ-REWARD-01: reward crates ("pick 1 of 3")
   it("rolls REWARD.choices distinct reward options", () => {
     const w = createWorld({ width: 800, height: 600, seed: 1, asteroids: 0 });
