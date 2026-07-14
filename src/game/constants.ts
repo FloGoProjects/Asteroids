@@ -596,3 +596,22 @@ export const BOUNTY = {
   credits: 2500, // bounty paid on kill (on top of the design's own credits)
   name: "KOPFGELD-ELITE",
 };
+
+// --- Convoy escort event (REQ-EVENT-02) --------------------------------
+// From CONVOY.fromWave a line of friendly freighters drifts across; raider fighters
+// attack them. Each freighter delivered to the far edge pays a bonus + a reward crate.
+export const CONVOY = {
+  fromWave: 3, // the escort event starts appearing from this wave
+  firstDelay: 24, // seconds until the first convoy
+  interval: 60, // seconds between convoys
+  count: 3, // freighters per convoy
+  spacing: 92, // px between freighters in the line
+  hp: 4, // hit points per freighter
+  radius: 20,
+  speed: 55, // horizontal drift speed (px/s)
+  raiderInterval: 3.2, // seconds between raider spawns during the event
+  raiderMax: 3, // simultaneous convoy raiders
+  raiderSpeed: 125, // raider approach speed toward a freighter
+  raiderFireCooldown: 1.6, // seconds between a raider's shots at a freighter
+  bonusCredits: 450, // credits per surviving (delivered) freighter
+};

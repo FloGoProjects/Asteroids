@@ -6,6 +6,7 @@ import { Planet } from "../game/planet.ts";
 import { Enemy } from "../game/enemy.ts";
 import { Loot } from "../game/loot.ts";
 import { Crate } from "../game/crate.ts";
+import { Freighter } from "../game/convoy.ts";
 import { Rocket } from "../game/rocket.ts";
 import { Mine } from "../game/mine.ts";
 import { SiegeMissile } from "../game/siege.ts";
@@ -89,6 +90,8 @@ export class Renderer {
     for (const l of world.loot) this.drawLoot(ctx, l);
     // Reward crates
     for (const c of world.crates) this.drawCrate(ctx, c);
+    // Convoy freighters (friendly, escort event)
+    for (const f of world.convoy) this.drawFreighter(ctx, f);
 
     // Asteroids
     for (const a of world.asteroids)
@@ -158,6 +161,8 @@ export class Renderer {
     if (world.state === "playing" && world.waveBanner > 0) this.drawWaveBanner(ctx, world);
     if (world.state === "playing" && world.werft) this.drawWerftHud(ctx, world);
     if (world.state === "playing" && world.bases.some((b) => b.elite)) this.drawBountyBanner(ctx);
+    if (world.state === "playing" && (world.convoyActive || world.convoyBanner > 0))
+      this.drawConvoyHud(ctx, world);
     if (world.state === "shop") this.drawShop(ctx, world);
     if (world.state === "reward") this.drawReward(ctx, world);
     if (world.state === "gameover") this.drawGameOver(ctx, world);
@@ -252,6 +257,51 @@ export class Renderer {
     ctx.shadowColor = "#ff7a2e";
     ctx.shadowBlur = 14;
     ctx.fillText(`◈ ${BOUNTY.name} · ${BOUNTY.credits} CR KOPFGELD`, this.w / 2, 44);
+    ctx.restore();
+  }
+
+  /** Friendly convoy freighter (blue-green hull + hp pips). REQ-EVENT-02. */
+  private drawFreighter(ctx: CanvasRenderingContext2D, f: Freighter): void {
+    const s = f.radius;
+    ctx.save();
+    ctx.translate(f.position.x, f.position.y);
+    ctx.fillStyle = "#3f6f7a";
+    ctx.strokeStyle = "#7fe7d9";
+    ctx.lineWidth = 2;
+    ctx.shadowColor = "#7fe7d9";
+    ctx.shadowBlur = 8;
+    this.roundRect(ctx, -s, -s * 0.6, s * 2, s * 1.2, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // cargo containers
+    ctx.fillStyle = "#cfe9ff";
+    ctx.fillRect(-s * 0.6, -s * 0.3, s * 0.5, s * 0.6);
+    ctx.fillRect(s * 0.1, -s * 0.3, s * 0.5, s * 0.6);
+    // hp pips above
+    const pipW = (s * 2) / f.maxHp;
+    for (let i = 0; i < f.maxHp; i++) {
+      ctx.fillStyle = i < f.hp ? "#5fdc7a" : "rgba(255,255,255,0.15)";
+      ctx.fillRect(-s + i * pipW + 1, -s * 0.6 - 8, pipW - 2, 3);
+    }
+    ctx.restore();
+  }
+
+  /** Convoy escort HUD: objective banner while active, result banner after. REQ-EVENT-02. */
+  private drawConvoyHud(ctx: CanvasRenderingContext2D, world: World): void {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.font = "800 22px 'Segoe UI', system-ui, sans-serif";
+    ctx.shadowBlur = 14;
+    if (world.convoyActive) {
+      ctx.fillStyle = "#7fe7d9";
+      ctx.shadowColor = "#7fe7d9";
+      ctx.fillText(`◈ KONVOI ESKORTIEREN · ${world.convoy.length} übrig`, this.w / 2, 44);
+    } else {
+      ctx.fillStyle = "#ffca6a";
+      ctx.shadowColor = "#ff7a2e";
+      ctx.fillText(`KONVOI: ${world.convoyDelivered} geliefert`, this.w / 2, 44);
+    }
     ctx.restore();
   }
 

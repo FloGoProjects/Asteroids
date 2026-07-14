@@ -22,6 +22,7 @@ import { createBullet } from "../src/game/bullet.ts";
 import { createBattleship, createEliteBattleship } from "../src/game/base.ts";
 import { createSiege } from "../src/game/siege.ts";
 import { createCrate } from "../src/game/crate.ts";
+import { createFreighter } from "../src/game/convoy.ts";
 import { vec, length } from "../src/engine/vector2.ts";
 import {
   SHIP,
@@ -45,6 +46,7 @@ import {
   HUNTER,
   REWARD,
   BOUNTY,
+  CONVOY,
 } from "../src/game/constants.ts";
 
 const IDLE = { turnLeft: false, turnRight: false, thrust: false, fire: false, fireSecondary: false };
@@ -1084,6 +1086,43 @@ describe("Titan battleship", () => {
     expect(w.bases.length).toBe(0); // destroyed
     expect(w.credits).toBe(credits0 + BATTLESHIPS.fortress.credits + BOUNTY.credits);
     expect(w.crates.length).toBeGreaterThanOrEqual(1); // guaranteed crate
+  });
+
+  // REQ-EVENT-02: convoy escort
+  it("spawns a convoy from its wave on a timer", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.wave = CONVOY.fromWave;
+    w.convoyTimer = 0;
+    updateWorld(w, IDLE, 0.02);
+    expect(w.convoyActive).toBe(true);
+    expect(w.convoy.length).toBe(CONVOY.count);
+  });
+
+  it("an enemy bullet damages a convoy freighter", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1, asteroids: 0 });
+    const f = createFreighter(vec(500, 350), vec(0, 0));
+    const hp0 = f.hp;
+    w.convoy.push(f);
+    w.convoyActive = true;
+    w.enemyBullets.push(createBullet(vec(500, 350), vec(0, 0), 5, ENEMY.bulletRadius, 1));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.convoy[0].hp).toBeLessThan(hp0);
+    expect(w.enemyBullets.length).toBe(0); // bullet consumed on the freighter
+  });
+
+  it("delivering a freighter pays a bonus and drops a reward crate", () => {
+    const w = createWorld({ width: 300, height: 300, seed: 1, asteroids: 0 });
+    w.convoyActive = true;
+    w.convoyDelivered = 0;
+    w.convoy.push(createFreighter(vec(w.width + 25, 150), vec(CONVOY.speed, 0))); // just past the edge
+    const credits0 = w.credits;
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.convoyActive).toBe(false); // event resolved
+    expect(w.credits).toBe(credits0 + CONVOY.bonusCredits); // one delivered
+    // the reward crate spawns at the ship and is collected immediately -> chooser opens
+    expect(w.state).toBe("reward");
   });
 
   // REQ-REWARD-01: reward crates ("pick 1 of 3")

@@ -16,6 +16,7 @@ import {
 } from "./enemy.ts";
 import { Loot, createLoot, updateLoot, isLootGone } from "./loot.ts";
 import { Crate, createCrate, updateCrate, isCrateGone } from "./crate.ts";
+import { Freighter, createFreighter, updateFreighter } from "./convoy.ts";
 import {
   Rocket,
   Targetable,
@@ -51,6 +52,7 @@ import {
   REWARD,
   RewardKind,
   BOUNTY,
+  CONVOY,
   LootKind,
   SecondaryId,
   WEAPONS,
@@ -119,6 +121,12 @@ export interface World {
   enemyTimer: number; // seconds until the next enemy spawns
   bases: Base[]; // enemy battleships (incl. the bounty elite)
   bountyTimer: number; // seconds until the next bounty elite appears. REQ-EVENT-01
+  convoy: Freighter[]; // friendly freighters to escort (REQ-EVENT-02)
+  convoyActive: boolean; // true while an escort event is running
+  convoyTimer: number; // seconds until the next convoy event
+  convoyRaiderTimer: number; // seconds until the next raider during the event
+  convoyDelivered: number; // freighters that reached the far edge this event
+  convoyBanner: number; // seconds to show the result banner (render)
   loot: Loot[]; // collectible drops
   crates: Crate[]; // reward crates on the field (REQ-REWARD-01)
   rewardChoices: RewardOption[]; // the 3 options shown while state === "reward"
@@ -210,6 +218,12 @@ export function createWorld(opts: WorldOptions): World {
     enemyTimer: ENEMY.firstSpawn,
     bases: [],
     bountyTimer: BOUNTY.firstDelay,
+    convoy: [],
+    convoyActive: false,
+    convoyTimer: CONVOY.firstDelay,
+    convoyRaiderTimer: CONVOY.raiderInterval,
+    convoyDelivered: 0,
+    convoyBanner: 0,
     loot: [],
     crates: [],
     rewardChoices: [],
@@ -676,6 +690,126 @@ function updateBounty(world: World, dt: number): void {
   }
 }
 
+// --- Convoy escort event (REQ-EVENT-02) --------------------------------
+/** Spawn a line of friendly freighters entering from the left, heading right. */
+function spawnConvoy(world: World): void {
+  const y0 = world.height / 2;
+  for (let i = 0; i < CONVOY.count; i++) {
+    const x = -CONVOY.radius - i * CONVOY.spacing;
+    const y = y0 + (i % 2 === 0 ? -34 : 34);
+    world.convoy.push(createFreighter(vec(x, y), vec(CONVOY.speed, 0)));
+  }
+  world.convoyActive = true;
+  world.convoyDelivered = 0;
+  world.convoyRaiderTimer = CONVOY.raiderInterval;
+}
+
+/** Spawn a raider fighter (hunts the convoy) from a random edge. */
+function spawnRaider(world: World): void {
+  const rng = world.rng;
+  const fromTop = rng.next() < 0.5;
+  const x = rng.range(world.width * 0.2, world.width * 0.9);
+  const y = fromTop ? -ENEMY.radius : world.height + ENEMY.radius;
+  const e = createEnemy(vec(x, y), vec(0, 0), "fighter");
+  e.hunting = "convoy";
+  world.enemies.push(e);
+}
+
+/** Nearest surviving freighter to a point, or null. */
+function nearestFreighter(world: World, from: Vec): Freighter | null {
+  let best: Freighter | null = null;
+  let bestD = Infinity;
+  for (const f of world.convoy) {
+    const d = distance(f.position, from);
+    if (d < bestD) {
+      bestD = d;
+      best = f;
+    }
+  }
+  return best;
+}
+
+/** End the escort event: pay per delivered freighter + drop a reward crate. */
+function resolveConvoy(world: World): void {
+  world.convoyActive = false;
+  world.enemies = world.enemies.filter((e) => e.hunting !== "convoy"); // raiders disperse
+  if (world.convoyDelivered > 0) {
+    world.credits += world.convoyDelivered * CONVOY.bonusCredits;
+    spawnCrate(world, world.ship.position); // REQ-REWARD-01
+  }
+  world.convoyBanner = 3.5;
+  world.convoyTimer = CONVOY.interval;
+}
+
+/** Drive the convoy escort event: trigger, drift/deliver freighters, raiders, damage, resolve. REQ-EVENT-02. */
+function updateConvoy(world: World, dt: number): void {
+  if (world.convoyBanner > 0) world.convoyBanner = Math.max(0, world.convoyBanner - dt);
+
+  if (!world.convoyActive) {
+    if (world.wavesEnabled && world.wave >= CONVOY.fromWave) {
+      world.convoyTimer -= dt;
+      if (world.convoyTimer <= 0) spawnConvoy(world);
+    }
+    if (!world.convoyActive) return;
+  }
+
+  // drift freighters; deliver those crossing the far edge
+  const remain: Freighter[] = [];
+  for (const f of world.convoy) {
+    updateFreighter(f, dt);
+    if (f.position.x - f.radius > world.width) world.convoyDelivered += 1; // safely delivered
+    else remain.push(f);
+  }
+  world.convoy = remain;
+
+  // spawn + steer + fire raiders at the nearest freighter
+  const raiderCount = world.enemies.reduce((n, e) => n + (e.hunting === "convoy" ? 1 : 0), 0);
+  if (world.convoy.length) {
+    world.convoyRaiderTimer -= dt;
+    if (world.convoyRaiderTimer <= 0 && raiderCount < CONVOY.raiderMax) {
+      spawnRaider(world);
+      world.convoyRaiderTimer = CONVOY.raiderInterval;
+    }
+  }
+  for (const e of world.enemies) {
+    if (e.hunting !== "convoy") continue;
+    const target = nearestFreighter(world, e.position);
+    if (!target) continue;
+    const dir = normalize(sub(target.position, e.position));
+    e.velocity = scale(dir, CONVOY.raiderSpeed);
+    e.fireTimer -= dt;
+    if (e.fireTimer <= 0) {
+      world.enemyBullets.push(
+        createBullet(e.position, scale(dir, ENEMY.bulletSpeed), ENEMY.bulletLife, ENEMY.bulletRadius, 1),
+      );
+      e.fireTimer = CONVOY.raiderFireCooldown;
+    }
+  }
+
+  // enemy bullets damage freighters
+  if (world.convoy.length && world.enemyBullets.length) {
+    const spent = new Set<Bullet>();
+    for (const b of world.enemyBullets) {
+      for (const f of world.convoy) {
+        if (circleHit(b.position, b.radius, f.position, f.radius)) {
+          f.hp -= b.damage;
+          spent.add(b);
+          world.onHit?.(f.position);
+          break;
+        }
+      }
+    }
+    if (spent.size) world.enemyBullets = world.enemyBullets.filter((b) => !spent.has(b));
+    const dead = world.convoy.filter((f) => f.hp <= 0);
+    if (dead.length) {
+      for (const f of dead) world.onExplosion?.(f.position, false);
+      world.convoy = world.convoy.filter((f) => f.hp > 0);
+    }
+  }
+
+  if (world.convoyActive && world.convoy.length === 0) resolveConvoy(world);
+}
+
 // --- Enemies (REQ-ENEMY-01, REQ-ENEMY-02) ------------------------------
 /** Chance a station spawn becomes a battleship: small at fromWave, growing with the wave. REQ-BASE-01. */
 function baseChanceForWave(wave: number): number {
@@ -787,7 +921,8 @@ function updateEnemies(world: World, dt: number): void {
   // move + fire: fighters shoot aimed bolts, stations sweep a charging beam
   for (const e of world.enemies) {
     updateEnemy(e, dt, world);
-    if (e.kind === "fighter") {
+    if (e.kind === "fighter" && e.hunting === "ship") {
+      // convoy raiders (hunting === "convoy") steer + fire in updateConvoy instead
       e.fireTimer -= dt;
       if (e.fireTimer <= 0) {
         fireEnemyBullet(world, e);
@@ -1472,6 +1607,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
 
   // Bounty elite event: a buffed battleship on a timer (REQ-EVENT-01)
   updateBounty(world, dt);
+
+  // Convoy escort event: protect friendly freighters (REQ-EVENT-02)
+  updateConvoy(world, dt);
 
   // Homing rockets steer + move (REQ-ROCKET-01)
   updateRockets(world, dt);

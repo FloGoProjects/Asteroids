@@ -22,6 +22,7 @@ export interface Enemy {
   beamPhase: BeamPhase; // charging-beam state (stations only)
   beamTimer: number; // seconds left in the current beam phase
   beamAngle: number; // aim direction, locked when the charge begins
+  hunting: "ship" | "convoy"; // what this enemy attacks (convoy raiders vs normal). REQ-EVENT-02
 }
 
 export function createEnemy(position: Vec, velocity: Vec, kind: EnemyKind = "fighter"): Enemy {
@@ -41,6 +42,7 @@ export function createEnemy(position: Vec, velocity: Vec, kind: EnemyKind = "fig
     beamPhase: "idle",
     beamTimer: kind === "station" ? STATION.beamAim : 0, // fighters never use the beam
     beamAngle: 0,
+    hunting: "ship",
   };
 }
 
