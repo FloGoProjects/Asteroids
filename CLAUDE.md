@@ -31,7 +31,8 @@ git push                    # löst Deploy automatisch aus
 - `src/main.ts` — Einstiegspunkt, Game-Loop
 - `src/engine/` — reine Utilities: `vector2` (Mathe), `wrap` (Bildschirmrand), `random` (deterministischer RNG)
 - `src/game/` — Spiellogik: `world` (Zustand), `ship`/`wingman`, `asteroid`, `bullet`/`rocket`/`mine`/`siege` (Belagerungs-/Jäger-Rakete), `enemy`, `collision`, `loot`, `crate` (Belohnungs-Kiste), `convoy` (Frachter), `shop`, `base`, `planet` (normal/shipyard), `constants`
-- **Schiffe** (REQ-SHIP-06): Sekundärwaffe ist schiffsgebunden (kein X-Toggle). `SHIPS[id].secondary` → `world.secondary` in `equipShip`. Minenleger `seeder` ('Sämann', Katamaran) legt Minen; Vanguard/Delta Raptor/Titan feuern Raketen.
+- **Schiffe** (REQ-SHIP-06): Sekundärwaffe ist schiffsgebunden (kein X-Toggle). `SHIPS[id].secondary` → `world.secondary` in `equipShip`. Minenleger `seeder` ('Sämann', Katamaran) legt Minen; die übrigen feuern Raketen.
+- **Großkampfschiffe** (nur an Werft-Planeten): `titan` (2 Türme + 5 Upgrades) und `cruiser` ('Hydra', REQ-SHIP-07: baut Raketen selbst bis `CRUISER.magazine`, feuert Salven via `fireRocketSalvo`, 1 Turm, keine Upgrades).
 - **Belohnungs-Kisten** (REQ-REWARD-01): Boss/Schlachtschiff/Event droppt eine Kiste; Einsammeln öffnet `state 'reward'` mit Auswahl 1-von-3 (`rollRewardChoices`/`applyReward`/`chooseReward`).
 - **Events**: Kopfgeld-Elite (REQ-EVENT-01, `createEliteBattleship`/`updateBounty`, gebufftes Schlachtschiff mit `BOUNTY`) und Konvoi-Eskorte (REQ-EVENT-02, `convoy.ts`/`updateConvoy`, Frachter schützen; Raider = `Enemy.hunting==='convoy'`). Beide droppen Belohnungs-Kisten.
 - **Titan-Werft-Event** (REQ-WERFT-01): ab Welle `WERFT.eventWave` verteidigt man einen Shipyard-Planeten gegen Belagerungsraketen; Zustand in `world.werft`; danach ist der Titan nur an Shipyard-Planeten (`atShipyard`) kaufbar. Shop-Items schalten per `unlockWave` nach Welle frei (REQ-SHOP-05).

@@ -61,6 +61,7 @@ import {
   SHIPS,
   TITAN_UPGRADE,
   DEFLECTOR,
+  CRUISER,
   AUTOCANNON,
   TRACTOR,
   WINGMAN,
@@ -1317,6 +1318,7 @@ export function equipShip(world: World, id: ShipId): void {
   world.ship.maxSpeed = spec.maxSpeed;
   world.secondary = spec.secondary; // secondary weapon is ship-bound now (no toggle). REQ-SHIP-06
   world.ship.turrets = (spec.turrets ?? []).map((t) => ({ ...t }));
+  if (id === "cruiser") world.ship.produceTimer = CRUISER.produceInterval; // start forging. REQ-SHIP-07
   world.ship.hasAutocannon = id === "titan" && world.shipUpgrades.includes("autocannon");
 
   if (id === "titan") {
@@ -1412,6 +1414,44 @@ function nearestTargetInRange(world: World, from: Vec, range: number): Targetabl
 }
 
 /** Autocannon upgrade: an extra turret that auto-aims at the nearest target and fires. REQ-SHIP-05. */
+/**
+ * Missile cruiser salvo: launch several rockets at once in a fan, aimed along the turret
+ * (mouse) direction. Each rocket acquires its own target. REQ-SHIP-07.
+ */
+function fireRocketSalvo(world: World): void {
+  const ship = world.ship;
+  const n = Math.min(CRUISER.salvoSize, world.rocketAmmo);
+  const baseAngle = ship.turrets.length > 0 ? ship.aimAngle : ship.angle;
+  for (let i = 0; i < n; i++) {
+    const offset = n === 1 ? 0 : (i / (n - 1) - 0.5) * CRUISER.salvoSpread;
+    const angle = baseAngle + offset;
+    const muzzle = add(ship.position, fromAngle(angle, ship.radius));
+    const target = acquireTarget(world, muzzle, angle, ROCKET.acquireCone);
+    world.rockets.push(createRocket(muzzle, angle, target));
+  }
+  world.rocketAmmo -= n;
+  world.secondaryCooldown = CRUISER.salvoCooldown;
+  world.shake = Math.max(world.shake, 0.3);
+}
+
+/**
+ * Missile cruiser: slowly forges rockets up to CRUISER.magazine. Bought rockets stack on top —
+ * production simply pauses while the pool is at or above the cap. REQ-SHIP-07.
+ */
+function updateRocketProduction(world: World, dt: number): void {
+  const ship = world.ship;
+  if (world.shipId !== "cruiser") return;
+  if (world.rocketAmmo >= CRUISER.magazine) {
+    ship.produceTimer = CRUISER.produceInterval; // full magazine — hold the next round
+    return;
+  }
+  ship.produceTimer -= dt;
+  if (ship.produceTimer <= 0) {
+    world.rocketAmmo += 1;
+    ship.produceTimer = CRUISER.produceInterval;
+  }
+}
+
 function updateAutocannon(world: World, dt: number): void {
   const ship = world.ship;
   if (!ship.hasAutocannon) return;
@@ -1617,7 +1657,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
   // Secondary weapon: rockets or mines (REQ-ROCKET-01, REQ-MINE-01)
   world.secondaryCooldown -= dt;
   if (input.fireSecondary && world.secondaryCooldown <= 0) {
-    if (world.secondary === "rocket" && world.rocketAmmo > 0) {
+    if (world.secondary === "rocket" && world.rocketAmmo > 0 && world.shipId === "cruiser") {
+      fireRocketSalvo(world); // the missile cruiser volleys several at once. REQ-SHIP-07
+    } else if (world.secondary === "rocket" && world.rocketAmmo > 0) {
       const nose = add(world.ship.position, fromAngle(world.ship.angle, world.ship.radius));
       const target = acquireTarget(world, nose, world.ship.angle, ROCKET.acquireCone);
       world.rockets.push(createRocket(nose, world.ship.angle, target));
@@ -1631,6 +1673,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
 
   // Autocannon upgrade fires on its own at nearby targets (REQ-SHIP-05)
   updateAutocannon(world, dt);
+
+  // Missile cruiser forges its own rockets over time (REQ-SHIP-07)
+  updateRocketProduction(world, dt);
 
   // Hangar wingmen fly in formation and auto-fire (REQ-SHIP-05)
   updateWingmen(world, dt);

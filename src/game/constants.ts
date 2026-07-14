@@ -15,7 +15,7 @@ export const SHIP = {
 };
 
 // --- Ships --------------------------------------------------------------
-export type ShipId = "vanguard" | "deltaRaptor" | "seeder" | "titan";
+export type ShipId = "vanguard" | "deltaRaptor" | "seeder" | "cruiser" | "titan";
 
 /** A hull-mounted, mouse-aimed gun turret. Offsets are in local hull space (+x = nose). */
 export interface TurretMount {
@@ -67,6 +67,18 @@ export const SHIPS: Record<ShipId, ShipSpec> = {
     maxSpeed: 480,
     price: 2200,
     secondary: "mine", // the dedicated mine-layer (REQ-SHIP-06)
+  },
+  cruiser: {
+    id: "cruiser",
+    name: "Hydra",
+    radius: 22, // capital-class hull (a touch smaller than the Titan)
+    turnSpeed: 1.9, // sluggish, but noticeably livelier than the Titan
+    thrust: 150,
+    maxSpeed: 240,
+    price: 6000,
+    secondary: "rocket", // the rocket battery is its identity (REQ-SHIP-07)
+    shieldCapacity: 1,
+    turrets: [{ x: 6, y: 0, barrel: 15 }], // a single centreline main gun (Titan has two)
   },
   titan: {
     id: "titan",
@@ -144,6 +156,19 @@ export const TITAN_UPGRADE = {
   engineThrust: 120, // extra thrust (px/s^2) from upgraded engines
   engineMaxSpeed: 120, // extra top speed (px/s)
   engineTurn: 0.9, // extra turn rate (rad/s)
+};
+
+/**
+ * Missile cruiser "Hydra" (REQ-SHIP-07): a second capital ship next to the Titan.
+ * It slowly forges its own rockets up to a magazine cap and fires them as a fast salvo.
+ * Bought rockets still stack on top; production simply pauses while above the cap.
+ */
+export const CRUISER = {
+  magazine: 8, // auto-production tops the rocket pool up to this many
+  produceInterval: 3.5, // seconds to forge one rocket
+  salvoSize: 3, // rockets launched per salvo
+  salvoSpread: 0.42, // radians: fan across the salvo
+  salvoCooldown: 1.1, // seconds between salvos
 };
 
 /** Deflector-pulse upgrade: a periodic shockwave that clears nearby enemy fire. REQ-SHIP-05. */

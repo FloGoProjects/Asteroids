@@ -46,6 +46,7 @@
     "v1.13.1": "Bugfix Schiffwechsel im Shop: der Shop unterschied nicht zwischen 'besessen' und 'ausgerüstet' -> jedes besessene Schiff zeigte AUSGERÜSTET und purchase gab 'owned' zurück, ein Wechsel war unmöglich. Neu isEquipped() (shop.ts); purchase re-equippt ein besessenes, nicht aktives Schiff/Waffe kostenlos (Result 'equipped'), nur das aktive zeigt AUSGERÜSTET, die übrigen 'WECHSELN'. Renderer nutzt isEquipped statt isOwned für das Label + WECHSELN-Zeile. Verifiziert per Unit-Tests + Offscreen-fillText-Spy (AUSGERÜSTET beim aktiven, WECHSELN beim anderen Schiff).",
     "v1.13": "Drittes Schiff 'Titan' (Schlachtschiff) mit maus-gezielten Türmen (REQ-SHIP-04). Neuer ShipSpec-Felder shieldCapacity + turrets (TurretMount[]). Träge Flugwerte, 3 Ladungen eingebaute Schilde, 3 Türme. Maus-Eingabe: keyboard.ts trackt Zeiger als Input.aim + linke Maustaste feuert (kombiniert mit Leertaste). world.ts: aimAngle aus Input.aim, fireWeapon feuert aus jeder Turmmündung entlang aimAngle (Ammo einmal pro Salve), equipShip überträgt Türme + stuft Schild monoton hoch. Renderer: drawTitanBody (Rumpf + zur Maus schwenkende Läufe), Shop-Icon, drawShip bekommt aimAngle. Shop-Item ship-titan (6500 CR). Verifiziert: 5 neue Unit-Tests + sichtbarkeits-unabhängige Offscreen-Pixelchecks (Turm-Mündung folgt Zielpunkt, Schiff/Icon rendern). HINWEIS: kein Live-Screenshot möglich (Browser-Pane hidden -> rAF pausiert).",
     "future": "Weitere Ideen: mehr Schiffe/Waffen/Gegnertypen, Highscore/Persistenz (localStorage), Soundeffekte/Musik. Belohnungs-Kisten (REQ-REWARD-01) + zwei Events (Kopfgeld-Elite REQ-EVENT-01, Konvoi-Eskorte REQ-EVENT-02) sind umgesetzt.",
+    "v1.33": "Raketenkreuzer 'Hydra' als zweites Großkampfschiff (REQ-SHIP-07). Design per SVG-Konzept gewählt (C Hydra). constants: ShipId += 'cruiser', SHIPS.cruiser (1 Turm, secondary 'rocket', beweglicher als Titan), CRUISER {magazine 8, produceInterval 3.5, salvoSize 3, salvoSpread 0.42, salvoCooldown 1.1}. ship.produceTimer. world: updateRocketProduction (füllt rocketAmmo bis magazine auf, pausiert darüber, nur auf dem Kreuzer) + fireRocketSalvo (Fächer entlang aimAngle, je Rakete eigene Zielerfassung) im Sekundärfeuer; equipShip startet den Forge-Timer. shop: ship-cruiser (shipyardOnly, 6000 CR). renderer: drawCruiserBody (Rumpf + zwei Pods mit je nach Magazin rot leuchtenden Sprengköpfen + schwenkender Hauptturm) + Shop-Icon; drawShip bekommt loadedRockets. Abgrenzung zum Titan: keine Titan-Upgrades, nur ein Turm. Tests 247->252. tsc strict grün, offscreen verifiziert (Pods leer 0 vs geladen 33 px).",
     "v1.32": "Hübschere Gegner-Raketen (Nutzer-Feedback: sahen wie 'Trichterchen' aus). renderer.drawSiege komplett neu — Design per SVG-Konzept gewählt (A Klassik): roter Spitz-Sprengkopf mit Warnlicht, gelber Warnring, Metallrumpf (roundRect), zwei Heckflossen, blaue Triebwerksflamme (lighter-Composite, zweistufig blau/weiß). Flacker-Untergrenze angehoben (flick 0.78±0.22 statt 0.6±0.4), damit das Triebwerk nie ausgeht. Gilt für Belagerungs- und Jäger-Raketen. Reine Render-Änderung, Tests unverändert 247. Offscreen verifiziert (Flamme durchgehend 45-53 px, Sprengkopf 42 px, Rumpf 230 px).",
     "v1.31": "Minenleger-Schiff 'Sämann' + schiffsgebundene Sekundärwaffe (REQ-SHIP-06). Rakete/Mine-Umschalten (X) war fummelig -> entfernt (cycleSecondary weg). ShipSpec.secondary je Schiff; equipShip setzt world.secondary. Neues Schiff seeder (Katamaran, secondary 'mine', 2200 CR, unlockWave 4), andere = 'rocket'. Shop-Item ship-seeder; renderer drawSeederBody (Doppelrumpf + Streutrommel) + Shop-Icon; index.html-Hinweis aktualisiert. Design per SVG-Konzept gewählt (B Sämann). Tests 246->247. tsc strict grün, offscreen verifiziert (Rumpf + Shop 'Sämann' + secondary 'mine').",
     "v1.30": "Werft-Event-Vorrang (REQ-WERFT-03, Nutzer-Feedback: Titan-Freischalt-Event startete durch die vielen Events nie). titanEventPending(world)=!werftDone && wave>=WERFT.eventWave blockt updateBounty + Konvoi-Trigger; Werft-Trigger (updatePlanets) weicht nur noch aktivem Konvoi/Elite aus, nicht mehr normalen Schlachtschiffen (otherEventActive). Tests 244->246. tsc strict grün.",
@@ -68,8 +69,8 @@
   "testStatus": {
     "lastRun": "2026-07-13",
     "summary": "alle Tests grün (216/216); TypeScript strict typecheck ohne Fehler. NEU v1.20 (Nutzerwunsch): (A) Progressiver Shop-Unlock (REQ-SHOP-05) — Items schalten nach Welle frei (unlockWave), gesperrt wird nur das NÄCHSTE Unlock je Seite als ausgegrauter '🔒 ab Welle N'-Teaser angezeigt (kein Zumüllen); Schild erst ab Welle 3. (B) Titan-Werft-Verteidigung (REQ-WERFT-01) — ab Welle 5 einmaliges Sonder-Level: Shipyard-Planet driftet in die Mitte, wird von langsamen Belagerungsraketen (neue Entität siege.ts) beschossen; abfangen mit Projektilen; Werft-Schadensbalken, bei 0 scheitert das Event (kommt neu), sonst gewonnen -> Titan an der Werft kaufbar. Danach ~1/3 der Planeten sind Werften; Titan + Upgrades NUR dort (shipyardOnly/atShipyard-Gating); der UPGRADES-Tab (visiblePages) erscheint nur an Werft-Planeten. Verifiziert per Unit-Tests (werft.test 10, shop.test-Gruppen) + Offscreen-Render (Werft-Ring/HUD, Tab-Spy: normal 4 Tabs, Werft 5 Tabs).",
-    "total": 247,
-    "passed": 247,
+    "total": 252,
+    "passed": 252,
     "failed": 0,
     "typecheck": "pass",
     "command": "npm test"
@@ -1112,6 +1113,29 @@
         "the secondary weapon is ship-bound: the Sämann lays mines, other ships fire rockets",
         "buys the Sämann mine-layer: owns, equips, and its secondary is mines",
         "groups items into ammo, weapon, ship, upgrade and equipment pages"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-SHIP-07",
+      "title": "Raketenkreuzer 'Hydra' (zweites Großkampfschiff)",
+      "category": "gameplay",
+      "priority": "should",
+      "description": "Neben dem Titan gibt es ein zweites Großkampfschiff zur Auswahl: den Raketenkreuzer 'Hydra'. Er produziert automatisch Raketen bis zu einem Magazin-Limit (CRUISER.magazine) und feuert sie als schnelle Salve (mehrere Raketen fächerförmig auf einmal). Bewusste Abgrenzung zum Titan: nur EIN maus-gezielter Turm (statt zwei), KEINE Titan-Upgrades, dafür beweglicher. Wie der Titan nur an Werft-Planeten kaufbar.",
+      "acceptanceCriteria": [
+        "SHIPS.cruiser (Name 'Hydra', radius 22, turnSpeed 1.9, thrust 150, maxSpeed 240, 6000 CR, secondary 'rocket', shieldCapacity 1, EIN Turm).",
+        "updateRocketProduction: beim Fliegen des Kreuzers wird world.rocketAmmo alle CRUISER.produceInterval Sekunden um 1 erhöht, aber nur bis CRUISER.magazine; gekaufte Raketen darüber bleiben erhalten (Produktion pausiert dann). Andere Schiffe produzieren nichts.",
+        "fireRocketSalvo: Sekundärfeuer auf dem Kreuzer startet min(CRUISER.salvoSize, rocketAmmo) Raketen gleichzeitig in einem Fächer (CRUISER.salvoSpread) entlang der Turm-Zielrichtung; jede erfasst ihr eigenes Ziel. Verbrauch entsprechend, danach CRUISER.salvoCooldown.",
+        "Shop-Item ship-cruiser ist shipyardOnly (Großkampfschiff-Klasse).",
+        "Renderer: drawCruiserBody (Rumpf + zwei Raketen-Pods, deren Sprengköpfe je nach geladener Raketenzahl rot aufleuchten, schwenkender Hauptturm, blaue Doppeldüsen) + Shop-Icon."
+      ],
+      "testFile": "test/world.test.ts, test/shop.test.ts",
+      "tests": [
+        "the cruiser forges rockets over time up to its magazine cap",
+        "does not forge rockets on other ships",
+        "the cruiser fires a salvo of several rockets at once",
+        "a salvo never fires more rockets than are loaded",
+        "the Hydra cruiser is shipyard-only and equips with its rocket battery"
       ],
       "status": "passing"
     },

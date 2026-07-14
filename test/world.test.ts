@@ -47,6 +47,7 @@ import {
   BOUNTY,
   CONVOY,
   WERFT,
+  CRUISER,
 } from "../src/game/constants.ts";
 
 const IDLE = { turnLeft: false, turnRight: false, thrust: false, fire: false, fireSecondary: false };
@@ -1050,6 +1051,47 @@ describe("Titan battleship", () => {
     for (let i = 0; i < 40; i++) updateWorld(w, IDLE, 0.05);
     const m = w.siege.find((x) => x.homing);
     expect(m && m.speed).toBeGreaterThan(s0); // sped up over time
+  });
+
+  // REQ-SHIP-07: missile cruiser "Hydra" — forges rockets, fires salvos
+  it("the cruiser forges rockets over time up to its magazine cap", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ownedShips.push("cruiser");
+    equipShip(w, "cruiser");
+    w.rocketAmmo = 0;
+    // ride out enough time to forge well past the cap
+    const steps = Math.ceil((CRUISER.produceInterval * (CRUISER.magazine + 3)) / 0.05);
+    for (let i = 0; i < steps; i++) updateWorld(w, IDLE, 0.05);
+    expect(w.rocketAmmo).toBe(CRUISER.magazine); // tops up, then stops at the cap
+  });
+
+  it("does not forge rockets on other ships", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.rocketAmmo = 0; // Vanguard
+    const steps = Math.ceil((CRUISER.produceInterval * 3) / 0.05);
+    for (let i = 0; i < steps; i++) updateWorld(w, IDLE, 0.05);
+    expect(w.rocketAmmo).toBe(0);
+  });
+
+  it("the cruiser fires a salvo of several rockets at once", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ownedShips.push("cruiser");
+    equipShip(w, "cruiser");
+    w.rocketAmmo = 6;
+    updateWorld(w, { ...IDLE, fireSecondary: true }, 1 / 120);
+    expect(w.rockets.length).toBe(CRUISER.salvoSize); // a volley, not a single rocket
+    expect(w.rocketAmmo).toBe(6 - CRUISER.salvoSize);
+    expect(w.secondaryCooldown).toBeGreaterThan(0); // salvo cooldown started
+  });
+
+  it("a salvo never fires more rockets than are loaded", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ownedShips.push("cruiser");
+    equipShip(w, "cruiser");
+    w.rocketAmmo = 1;
+    updateWorld(w, { ...IDLE, fireSecondary: true }, 1 / 120);
+    expect(w.rockets.length).toBe(1);
+    expect(w.rocketAmmo).toBe(0);
   });
 
   // REQ-EVENT-01: bounty elite

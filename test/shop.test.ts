@@ -33,6 +33,7 @@ describe("shop catalog", () => {
       "equip-antigrav",
       "equip-shield",
       "extra-life",
+      "ship-cruiser",
       "ship-deltaRaptor",
       "ship-seeder",
       "ship-titan",
@@ -60,6 +61,7 @@ describe("shop pages", () => {
     expect(itemsForPage("ship").map((i) => i.id)).toEqual([
       "ship-deltaRaptor",
       "ship-seeder",
+      "ship-cruiser",
       "ship-titan",
     ]);
     expect(itemsForPage("upgrade").map((i) => i.id)).toEqual([
@@ -233,6 +235,22 @@ describe("purchasing", () => {
     expect(w.ownedShips).toContain("deltaRaptor");
     expect(w.shipId).toBe("deltaRaptor");
     expect(w.ship.radius).toBe(SHIPS.deltaRaptor.radius);
+  });
+
+  it("the Hydra cruiser is shipyard-only and equips with its rocket battery", () => {
+    const w = newWorld();
+    w.wave = 9;
+    w.atShipyard = false;
+    expect(visibleItems(w, "ship").map((i) => i.id)).not.toContain("ship-cruiser");
+    w.atShipyard = true;
+    expect(visibleItems(w, "ship").map((i) => i.id)).toContain("ship-cruiser");
+
+    w.credits = 20000;
+    const r = purchase(w, item("ship-cruiser"));
+    expect(r).toBe("ok");
+    expect(w.shipId).toBe("cruiser");
+    expect(w.secondary).toBe("rocket");
+    expect(w.ship.turrets.length).toBe(1); // single main gun (Titan has two)
   });
 
   it("buys the Sämann mine-layer: owns, equips, and its secondary is mines", () => {

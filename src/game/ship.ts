@@ -38,6 +38,7 @@ export interface Ship {
   tractorCooldown: number; // seconds until the tractor beam can grab the next asteroid
   deflectorCooldown: number; // seconds until the next deflector pulse (deflector upgrade)
   deflectorFlash: number; // seconds left of the deflector pulse ring animation (render)
+  produceTimer: number; // seconds until the missile cruiser forges its next rocket. REQ-SHIP-07
 }
 
 export function createShip(position: Vec, shipId: ShipId = "vanguard"): Ship {
@@ -67,6 +68,7 @@ export function createShip(position: Vec, shipId: ShipId = "vanguard"): Ship {
     tractorCooldown: 0,
     deflectorCooldown: 0,
     deflectorFlash: 0,
+    produceTimer: 0,
   };
 }
 

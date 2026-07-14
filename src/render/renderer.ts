@@ -136,6 +136,7 @@ export class Renderer {
         world.ship.aimAngle,
         world.shipUpgrades,
         world.ship.autoAimAngle,
+        world.rocketAmmo, // the cruiser's pods light up per loaded rocket
       );
       if (world.ship.antigrav > 0) this.drawAntigravField(ctx, world.ship.position, this.t);
       if (world.ship.deflectorFlash > 0)
@@ -1187,6 +1188,7 @@ export class Renderer {
     aimAngle: number,
     upgrades: readonly string[],
     autoAimAngle: number,
+    loadedRockets = 0,
   ): void {
     ctx.save();
     ctx.translate(pos.x, pos.y);
@@ -1200,11 +1202,111 @@ export class Renderer {
     ctx.lineJoin = "round";
     if (shipId === "deltaRaptor") this.drawDeltaRaptorBody(ctx, thrusting);
     else if (shipId === "seeder") this.drawSeederBody(ctx, thrusting);
+    else if (shipId === "cruiser")
+      this.drawCruiserBody(ctx, thrusting, aimAngle - angle, loadedRockets);
     else if (shipId === "titan")
       this.drawTitanBody(ctx, thrusting, aimAngle - angle, upgrades, autoAimAngle - angle);
     else this.drawVanguardBody(ctx, thrusting);
 
     ctx.restore();
+  }
+
+  /**
+   * "Hydra" — missile cruiser: compact hull, two fat rocket pods whose loaded warheads stick out,
+   * and a single mouse-aimed main gun. Forward = +x. REQ-SHIP-07.
+   */
+  private drawCruiserBody(
+    ctx: CanvasRenderingContext2D,
+    thrusting: boolean,
+    aimRel: number,
+    loaded: number,
+  ): void {
+    // twin engine flames
+    if (thrusting) {
+      const flick = 0.7 + Math.random() * 0.5;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (const ey of [-6, 6]) {
+        const fg = ctx.createLinearGradient(-20, ey, -20 - 24 * flick, ey);
+        fg.addColorStop(0, "rgba(120,200,255,0.95)");
+        fg.addColorStop(1, "rgba(40,90,255,0)");
+        ctx.fillStyle = fg;
+        ctx.beginPath();
+        ctx.moveTo(-19, ey - 3.4);
+        ctx.lineTo(-20 - 24 * flick, ey);
+        ctx.lineTo(-19, ey + 3.4);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // two rocket pods (above and below the hull)
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = "#2a3542";
+      ctx.strokeStyle = "#8493a6";
+      ctx.lineWidth = 1.5;
+      this.roundRect(ctx, -14, s < 0 ? -20 : 9, 24, 11, 4);
+      ctx.fill();
+      ctx.stroke();
+      // amber charge strip on the pod
+      ctx.fillStyle = "#ffb347";
+      ctx.fillRect(-11, s < 0 ? -17 : 12, 3, 5);
+      // loaded warheads sticking out of the pod mouth (2 per pod, lit by the magazine)
+      for (let i = 0; i < 2; i++) {
+        const idx = (s < 0 ? 0 : 2) + i;
+        const ready = loaded > idx;
+        const wy = (s < 0 ? -17 : 12) + i * 5;
+        ctx.fillStyle = ready ? "#d94c3a" : "#3d4854";
+        ctx.beginPath();
+        ctx.moveTo(10, wy - 1.8);
+        ctx.lineTo(17, wy);
+        ctx.lineTo(10, wy + 1.8);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // hull
+    ctx.fillStyle = "#333b47";
+    ctx.strokeStyle = "#7fe7d9";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(22, 0);
+    ctx.lineTo(13, -8);
+    ctx.lineTo(-14, -9);
+    ctx.lineTo(-20, -5);
+    ctx.lineTo(-20, 5);
+    ctx.lineTo(-14, 9);
+    ctx.lineTo(13, 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // mouse-aimed main gun on the centreline
+    ctx.save();
+    ctx.translate(6, 0);
+    ctx.rotate(aimRel);
+    ctx.fillStyle = "#3a4552";
+    ctx.strokeStyle = "#9fb0c3";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#5b6675";
+    ctx.fillRect(0, -1.8, 15, 3.6);
+    ctx.strokeRect(0, -1.8, 15, 3.6);
+    ctx.restore();
+
+    // cockpit
+    ctx.fillStyle = "#57e5ff";
+    ctx.shadowColor = "#57e5ff";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(-6, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
   }
 
   /** "Sämann" — mine-layer catamaran: twin hulls + a central dispenser drum. Forward = +x. REQ-SHIP-06. */
@@ -2621,6 +2723,47 @@ export class Renderer {
       ctx.arc(-10, 0, 4, 0, Math.PI * 2); // a laid mine between the tails
       ctx.fill();
       ctx.stroke();
+    } else if (item.id === "ship-cruiser") {
+      // missile cruiser: hull with two rocket pods, warheads sticking out, pointing up
+      ctx.translate(cx, cy);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = "#2a3542";
+      ctx.strokeStyle = "#8493a6";
+      ctx.lineWidth = 1.5;
+      for (const s of [-1, 1]) {
+        this.roundRect(ctx, -9, s < 0 ? -15 : 7, 16, 8, 3);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#d94c3a";
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(7, s < 0 ? -13 : 9);
+        ctx.lineTo(13, s < 0 ? -11 : 11);
+        ctx.lineTo(7, s < 0 ? -9 : 13);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.fillStyle = "#243244";
+      ctx.strokeStyle = COLORS.hud;
+      ctx.shadowColor = COLORS.hud;
+      ctx.shadowBlur = 6;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(15, 0);
+      ctx.lineTo(8, -7);
+      ctx.lineTo(-11, -7);
+      ctx.lineTo(-14, 0);
+      ctx.lineTo(-11, 7);
+      ctx.lineTo(8, 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = COLORS.hud;
+      ctx.beginPath();
+      ctx.arc(2, 0, 2.4, 0, Math.PI * 2);
+      ctx.fill();
     } else if (item.id === "ship-titan") {
       // chunky battleship silhouette with turret dots, pointing up
       ctx.translate(cx, cy);

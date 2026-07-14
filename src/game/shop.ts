@@ -109,6 +109,15 @@ export const SHOP_ITEMS: ShopItem[] = [
     unlockWave: 4,
   },
   {
+    id: "ship-cruiser",
+    kind: "ship",
+    name: SHIPS.cruiser.name,
+    price: SHIPS.cruiser.price,
+    ref: "cruiser",
+    desc: "Raketenkreuzer · baut Raketen selbst · Salve auf S / ↓",
+    shipyardOnly: true, // capital ship — only in a planet's orbital shipyard. REQ-SHIP-07
+  },
+  {
     id: "ship-titan",
     kind: "ship",
     name: SHIPS.titan.name,
