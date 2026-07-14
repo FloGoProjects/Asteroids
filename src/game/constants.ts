@@ -609,9 +609,12 @@ export const CONVOY = {
   hp: 4, // hit points per freighter
   radius: 20,
   speed: 55, // horizontal drift speed (px/s)
-  raiderInterval: 3.2, // seconds between raider spawns during the event
-  raiderMax: 3, // simultaneous convoy raiders
+  raiderInterval: 6.0, // seconds between raider spawns during the event (was 3.2 — too heavy)
+  raiderMax: 2, // simultaneous convoy raiders (halved from 3)
   raiderSpeed: 125, // raider approach speed toward a freighter
+  raiderStandoff: 95, // px: raiders hold at this range and strafe instead of piling onto the hull
   raiderFireCooldown: 1.6, // seconds between a raider's shots at a freighter
+  raiderCredits: 40, // small payout for downing an event raider (was the full fighter 320)
+  raiderScore: 40,
   bonusCredits: 450, // credits per surviving (delivered) freighter
 };

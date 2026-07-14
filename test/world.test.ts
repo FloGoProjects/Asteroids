@@ -1125,6 +1125,36 @@ describe("Titan battleship", () => {
     expect(w.state).toBe("reward");
   });
 
+  it("a convoy raider pays little and drops no loot", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ship.invuln = 999;
+    const raider = createEnemy(vec(450, 350), vec(0, 0), "fighter");
+    raider.hunting = "convoy";
+    raider.credits = CONVOY.raiderCredits;
+    raider.score = CONVOY.raiderScore;
+    raider.hp = 1;
+    w.enemies.push(raider);
+    const credits0 = w.credits;
+    w.bullets.push(createBullet(vec(450, 350), vec(0, 0), 1, 3, 5));
+    updateWorld(w, IDLE, 1 / 120);
+    expect(w.enemies.length).toBe(0); // killed
+    expect(w.credits).toBe(credits0 + CONVOY.raiderCredits); // small payout, not the full fighter value
+    expect(w.loot.length).toBe(0); // event raiders drop no loot
+  });
+
+  it("no new event starts while a battleship is on the field", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.wave = BOUNTY.fromWave;
+    w.bountyTimer = 0;
+    w.convoyTimer = 0;
+    w.bases.push(createBattleship("mandible", vec(500, 350), vec(0, 0)));
+    updateWorld(w, IDLE, 0.02);
+    expect(w.bases.some((b) => b.elite)).toBe(false); // bounty blocked
+    expect(w.convoyActive).toBe(false); // convoy blocked
+  });
+
   // REQ-HUD: pickup toasts, event banners, death cause
   it("shows a pickup toast with the amount", () => {
     const w = createWorld({ width: 400, height: 400, seed: 1, asteroids: 0 });

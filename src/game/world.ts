@@ -406,7 +406,8 @@ function updatePlanets(world: World, dt: number): void {
   } else {
     world.planetTimer -= dt;
     if (world.planetTimer <= 0) {
-      if (!world.werftDone && world.wavesEnabled && world.wave >= WERFT.eventWave) startWerftEvent(world);
+      if (!world.werftDone && world.wavesEnabled && world.wave >= WERFT.eventWave && !eventBlocking(world))
+        startWerftEvent(world);
       else spawnPlanet(world);
     }
   }
@@ -700,10 +701,18 @@ function spawnBountyElite(world: World): void {
   };
 }
 
+/**
+ * A new event must not start while another event runs or a battleship is on the field.
+ * Covers the shipyard defense, the bounty elite, the convoy, and any live battleship. REQ-EVENT-03.
+ */
+function eventBlocking(world: World): boolean {
+  return world.werft !== null || world.convoyActive || world.bases.length > 0;
+}
+
 /** Tick the bounty-elite timer and spawn one (only one at a time) from BOUNTY.fromWave. REQ-EVENT-01. */
 function updateBounty(world: World, dt: number): void {
   if (!world.wavesEnabled || world.wave < BOUNTY.fromWave) return;
-  if (world.bases.some((b) => b.elite)) return; // only one elite at a time
+  if (eventBlocking(world)) return; // no overlapping events / while a battleship is present
   world.bountyTimer -= dt;
   if (world.bountyTimer <= 0) {
     spawnBountyElite(world);
@@ -738,6 +747,8 @@ function spawnRaider(world: World): void {
   const y = fromTop ? -ENEMY.radius : world.height + ENEMY.radius;
   const e = createEnemy(vec(x, y), vec(0, 0), "fighter");
   e.hunting = "convoy";
+  e.credits = CONVOY.raiderCredits; // event raiders pay little (no farming). REQ-EVENT-02
+  e.score = CONVOY.raiderScore;
   world.enemies.push(e);
 }
 
@@ -772,7 +783,7 @@ function updateConvoy(world: World, dt: number): void {
   if (world.convoyBanner > 0) world.convoyBanner = Math.max(0, world.convoyBanner - dt);
 
   if (!world.convoyActive) {
-    if (world.wavesEnabled && world.wave >= CONVOY.fromWave) {
+    if (world.wavesEnabled && world.wave >= CONVOY.fromWave && !eventBlocking(world)) {
       world.convoyTimer -= dt;
       if (world.convoyTimer <= 0) spawnConvoy(world);
     }
@@ -802,7 +813,14 @@ function updateConvoy(world: World, dt: number): void {
     const target = nearestFreighter(world, e.position);
     if (!target) continue;
     const dir = normalize(sub(target.position, e.position));
-    e.velocity = scale(dir, CONVOY.raiderSpeed);
+    const d = distance(target.position, e.position);
+    // Close to a firing standoff, then strafe sideways so raiders don't pile onto the hull.
+    if (d > CONVOY.raiderStandoff) {
+      e.velocity = scale(dir, CONVOY.raiderSpeed);
+    } else {
+      const perp = vec(-dir.y, dir.x);
+      e.velocity = scale(perp, CONVOY.raiderSpeed * 0.7);
+    }
     e.fireTimer -= dt;
     if (e.fireTimer <= 0) {
       world.enemyBullets.push(
@@ -1093,7 +1111,7 @@ function hitEnemy(world: World, e: Enemy, dmg: number, deadEnemies: Set<Enemy>):
     world.credits += e.credits;
     world.shake = Math.max(world.shake, 0.4);
     world.onExplosion?.(e.position, true);
-    dropLoot(world, e.position);
+    if (e.hunting !== "convoy") dropLoot(world, e.position); // event raiders drop no loot. REQ-EVENT-02
   } else {
     world.onHit?.(e.position);
   }
