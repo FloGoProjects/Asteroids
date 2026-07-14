@@ -170,38 +170,78 @@ export class Renderer {
     if (world.state === "paused") this.drawPause(ctx);
   }
 
-  /** A slow incoming siege missile: warhead + fins + exhaust, pointing along its heading. REQ-WERFT-01. */
+  /** A classic missile: pointed red warhead, metal body, tail fins, blue engine flame. REQ-WERFT-01. */
   private drawSiege(ctx: CanvasRenderingContext2D, m: SiegeMissile): void {
     const ang = Math.atan2(m.velocity.y, m.velocity.x);
+    const r = m.radius;
     ctx.save();
     ctx.translate(m.position.x, m.position.y);
     ctx.rotate(ang);
-    // exhaust flare at the tail
-    const flick = 0.6 + 0.4 * Math.sin(this.t * 30 + m.position.x);
-    ctx.fillStyle = `rgba(255, 140, 40, ${0.5 * flick})`;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    // engine flame (blue). The flicker keeps a high floor so the engine never blinks out.
+    const flick = 0.78 + 0.22 * Math.sin(this.t * 34 + m.position.x);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = `rgba(108,196,255,${0.85 * flick})`;
     ctx.beginPath();
-    ctx.moveTo(-m.radius, 0);
-    ctx.lineTo(-m.radius - 12 * flick, -3);
-    ctx.lineTo(-m.radius - 12 * flick, 3);
+    ctx.moveTo(-r * 1.7, -r * 0.42);
+    ctx.lineTo(-r * (2.6 + 1.2 * flick), 0);
+    ctx.lineTo(-r * 1.7, r * 0.42);
     ctx.closePath();
     ctx.fill();
-    // body
+    ctx.fillStyle = `rgba(234,246,255,${0.95 * flick})`;
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.7, -r * 0.22);
+    ctx.lineTo(-r * (2.2 + 0.8 * flick), 0);
+    ctx.lineTo(-r * 1.7, r * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // tail fins
+    ctx.fillStyle = "#2a3542";
+    ctx.strokeStyle = "#8493a6";
+    ctx.lineWidth = 1;
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 1.5, r * 0.7 * s);
+      ctx.lineTo(-r * 2.4, r * 1.15 * s);
+      ctx.lineTo(-r * 1.2, r * 0.7 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // metal body
+    ctx.fillStyle = "#4a5663";
+    ctx.strokeStyle = "#9fb0c3";
+    this.roundRect(ctx, -r * 1.5, -r * 0.7, r * 2.5, r * 1.4, r * 0.35);
+    ctx.fill();
+    ctx.stroke();
+
+    // hazard band at the warhead join
+    ctx.fillStyle = "#ffb347";
+    ctx.fillRect(r * 0.55, -r * 0.7, r * 0.4, r * 1.4);
+
+    // pointed warhead
     ctx.fillStyle = "#d94c3a";
     ctx.strokeStyle = "#ff9a6a";
-    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(m.radius + 4, 0); // nose
-    ctx.lineTo(-m.radius, -m.radius * 0.7);
-    ctx.lineTo(-m.radius, m.radius * 0.7);
+    ctx.moveTo(r * 1.0, -r * 0.7);
+    ctx.lineTo(r * 2.1, 0);
+    ctx.lineTo(r * 1.0, r * 0.7);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    // warning glow
+
+    // warning light on the warhead
     ctx.shadowColor = "#ff5a3c";
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = "#ffd0a0";
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = "#ffe1b0";
     ctx.beginPath();
-    ctx.arc(m.radius * 0.2, 0, 1.6, 0, Math.PI * 2);
+    ctx.arc(r * 1.35, 0, r * 0.22, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
