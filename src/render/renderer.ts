@@ -1159,11 +1159,77 @@ export class Renderer {
 
     ctx.lineJoin = "round";
     if (shipId === "deltaRaptor") this.drawDeltaRaptorBody(ctx, thrusting);
+    else if (shipId === "seeder") this.drawSeederBody(ctx, thrusting);
     else if (shipId === "titan")
       this.drawTitanBody(ctx, thrusting, aimAngle - angle, upgrades, autoAimAngle - angle);
     else this.drawVanguardBody(ctx, thrusting);
 
     ctx.restore();
+  }
+
+  /** "Sämann" — mine-layer catamaran: twin hulls + a central dispenser drum. Forward = +x. REQ-SHIP-06. */
+  private drawSeederBody(ctx: CanvasRenderingContext2D, thrusting: boolean): void {
+    // twin thruster flames from the two hull tails (y = ±9)
+    if (thrusting) {
+      const flick = 0.7 + Math.random() * 0.5;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (const ey of [-9, 9]) {
+        const fg = ctx.createLinearGradient(-14, ey, -14 - 20 * flick, ey);
+        fg.addColorStop(0, "rgba(255,190,60,0.9)");
+        fg.addColorStop(1, "rgba(255,60,0,0)");
+        ctx.fillStyle = fg;
+        ctx.beginPath();
+        ctx.moveTo(-13, ey - 2.6);
+        ctx.lineTo(-14 - 20 * flick, ey);
+        ctx.lineTo(-13, ey + 2.6);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    ctx.fillStyle = "#2b3540";
+    ctx.strokeStyle = "#7fe7d9";
+    ctx.lineWidth = 2;
+    // two parallel pontoon hulls
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(17, 4 * s);
+      ctx.lineTo(4, 13 * s);
+      ctx.lineTo(-13, 12 * s);
+      ctx.lineTo(-13, 5 * s);
+      ctx.lineTo(4, 4 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    // central bridge connecting the hulls
+    ctx.fillStyle = "#3a4552";
+    ctx.beginPath();
+    ctx.moveTo(8, -6);
+    ctx.lineTo(10, 0);
+    ctx.lineTo(8, 6);
+    ctx.lineTo(-6, 6);
+    ctx.lineTo(-6, -6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // rear dispenser drum (amber accent — the mine bay)
+    ctx.fillStyle = "#3a2a12";
+    ctx.strokeStyle = "#ffb347";
+    ctx.lineWidth = 1.5;
+    this.roundRect(ctx, -14, -6, 10, 12, 3);
+    ctx.fill();
+    ctx.stroke();
+    // cockpit
+    ctx.fillStyle = "#57e5ff";
+    ctx.shadowColor = "#57e5ff";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(6, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
   }
 
   /** "Vanguard" — heavy armored fighter. Forward = +x. */
@@ -2488,6 +2554,33 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(5, 0, 2, 0, Math.PI * 2);
       ctx.fill();
+    } else if (item.id === "ship-seeder") {
+      // mine-layer catamaran: two hulls + a mine dot between them, pointing up
+      ctx.translate(cx, cy);
+      ctx.rotate(-Math.PI / 2);
+      ctx.strokeStyle = COLORS.hud;
+      ctx.fillStyle = "#243244";
+      ctx.shadowColor = COLORS.hud;
+      ctx.shadowBlur = 6;
+      ctx.lineWidth = 2;
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(15, 4 * s);
+        ctx.lineTo(2, 12 * s);
+        ctx.lineTo(-12, 11 * s);
+        ctx.lineTo(-12, 5 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "#ff5a3c";
+      ctx.fillStyle = "#141a22";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(-10, 0, 4, 0, Math.PI * 2); // a laid mine between the tails
+      ctx.fill();
+      ctx.stroke();
     } else if (item.id === "ship-titan") {
       // chunky battleship silhouette with turret dots, pointing up
       ctx.translate(cx, cy);

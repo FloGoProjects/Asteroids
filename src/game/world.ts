@@ -1305,12 +1305,7 @@ export function cycleAmmo(world: World): void {
   world.ammo = AMMO_ORDER[(i + 1) % AMMO_ORDER.length];
 }
 
-/** Toggle the secondary weapon between rockets and mines. REQ-MINE-01. */
-export function cycleSecondary(world: World): void {
-  world.secondary = world.secondary === "rocket" ? "mine" : "rocket";
-}
-
-/** Equip an owned ship, applying its flight stats + installed upgrades in place. REQ-SHIP-03, REQ-SHIP-04, REQ-SHIP-05. */
+/** Equip an owned ship, applying its flight stats + installed upgrades in place. REQ-SHIP-03, REQ-SHIP-04, REQ-SHIP-05, REQ-SHIP-06. */
 export function equipShip(world: World, id: ShipId): void {
   if (!world.ownedShips.includes(id)) return;
   const spec = SHIPS[id];
@@ -1320,6 +1315,7 @@ export function equipShip(world: World, id: ShipId): void {
   world.ship.turnSpeed = spec.turnSpeed;
   world.ship.thrust = spec.thrust;
   world.ship.maxSpeed = spec.maxSpeed;
+  world.secondary = spec.secondary; // secondary weapon is ship-bound now (no toggle). REQ-SHIP-06
   world.ship.turrets = (spec.turrets ?? []).map((t) => ({ ...t }));
   world.ship.hasAutocannon = id === "titan" && world.shipUpgrades.includes("autocannon");
 

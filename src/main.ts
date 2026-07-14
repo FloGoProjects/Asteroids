@@ -6,7 +6,6 @@ import {
   equipAmmo,
   cycleWeapon,
   cycleAmmo,
-  cycleSecondary,
   closeShop,
   chooseReward,
   World,
@@ -124,10 +123,9 @@ window.addEventListener("keydown", (e) => {
   else if (e.code === "Digit4") equipAmmo(world, "standard");
   else if (e.code === "Digit5") equipAmmo(world, "ap");
   else if (e.code === "Digit6") equipAmmo(world, "explosive");
-  // cycle through owned weapons (E) / ammo types (Q) / secondary weapon (X)
+  // cycle through owned weapons (E) / ammo types (Q). Secondary weapon is ship-bound now. REQ-SHIP-06
   else if (e.code === "KeyE") cycleWeapon(world);
   else if (e.code === "KeyQ") cycleAmmo(world);
-  else if (e.code === "KeyX") cycleSecondary(world);
   // DEV: temporary unlock until the shop exists (remove before release)
   else if (e.code === "Digit9") {
     if (!world.ownedWeapons.includes("vulkan")) world.ownedWeapons.push("vulkan");

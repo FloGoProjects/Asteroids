@@ -34,6 +34,7 @@ describe("shop catalog", () => {
       "equip-shield",
       "extra-life",
       "ship-deltaRaptor",
+      "ship-seeder",
       "ship-titan",
       "upgrade-autocannon",
       "upgrade-deflector",
@@ -56,7 +57,11 @@ describe("shop pages", () => {
       "ammo-mine",
     ]);
     expect(itemsForPage("weapon").map((i) => i.id)).toEqual(["vulkan", "ballista"]);
-    expect(itemsForPage("ship").map((i) => i.id)).toEqual(["ship-deltaRaptor", "ship-titan"]);
+    expect(itemsForPage("ship").map((i) => i.id)).toEqual([
+      "ship-deltaRaptor",
+      "ship-seeder",
+      "ship-titan",
+    ]);
     expect(itemsForPage("upgrade").map((i) => i.id)).toEqual([
       "upgrade-deflector",
       "upgrade-engines",
@@ -228,6 +233,17 @@ describe("purchasing", () => {
     expect(w.ownedShips).toContain("deltaRaptor");
     expect(w.shipId).toBe("deltaRaptor");
     expect(w.ship.radius).toBe(SHIPS.deltaRaptor.radius);
+  });
+
+  it("buys the Sämann mine-layer: owns, equips, and its secondary is mines", () => {
+    const w = newWorld();
+    w.credits = 5000;
+    const r = purchase(w, item("ship-seeder"));
+    expect(r).toBe("ok");
+    expect(w.credits).toBe(5000 - SHIPS.seeder.price);
+    expect(w.ownedShips).toContain("seeder");
+    expect(w.shipId).toBe("seeder");
+    expect(w.secondary).toBe("mine"); // ship-bound secondary. REQ-SHIP-06
   });
 
   it("buys the Titan: deducts credits, owns and equips it with turrets", () => {

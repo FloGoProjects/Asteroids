@@ -9,7 +9,6 @@ import {
   rollShopStock,
   cycleWeapon,
   cycleAmmo,
-  cycleSecondary,
   rollRewardChoices,
   applyReward,
   chooseReward,
@@ -740,13 +739,14 @@ describe("homing rockets", () => {
 
 // REQ-MINE-01: space mines (secondary weapon)
 describe("space mines", () => {
-  it("cycleSecondary toggles between rocket and mine", () => {
+  it("the secondary weapon is ship-bound: the Sämann lays mines, other ships fire rockets", () => {
     const w = createWorld({ width: 800, height: 600, seed: 1, asteroids: 0 });
-    expect(w.secondary).toBe("rocket");
-    cycleSecondary(w);
-    expect(w.secondary).toBe("mine");
-    cycleSecondary(w);
-    expect(w.secondary).toBe("rocket");
+    expect(w.secondary).toBe("rocket"); // Vanguard = rockets
+    w.ownedShips.push("seeder");
+    equipShip(w, "seeder");
+    expect(w.secondary).toBe("mine"); // the mine-layer
+    equipShip(w, "vanguard");
+    expect(w.secondary).toBe("rocket"); // back to rockets, no toggle needed
   });
 
   it("dropping mines lays a field behind the ship and consumes mine ammo", () => {

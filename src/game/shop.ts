@@ -100,6 +100,15 @@ export const SHOP_ITEMS: ShopItem[] = [
     unlockWave: 3,
   },
   {
+    id: "ship-seeder",
+    kind: "ship",
+    name: SHIPS.seeder.name,
+    price: SHIPS.seeder.price,
+    ref: "seeder",
+    desc: "Minenleger · legt Minen (S / ↓) · wendiger Katamaran",
+    unlockWave: 4,
+  },
+  {
     id: "ship-titan",
     kind: "ship",
     name: SHIPS.titan.name,

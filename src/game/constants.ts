@@ -15,7 +15,7 @@ export const SHIP = {
 };
 
 // --- Ships --------------------------------------------------------------
-export type ShipId = "vanguard" | "deltaRaptor" | "titan";
+export type ShipId = "vanguard" | "deltaRaptor" | "seeder" | "titan";
 
 /** A hull-mounted, mouse-aimed gun turret. Offsets are in local hull space (+x = nose). */
 export interface TurretMount {
@@ -32,6 +32,7 @@ export interface ShipSpec {
   thrust: number; // px/s^2
   maxSpeed: number; // px/s
   price: number; // shop cost in credits
+  secondary: "rocket" | "mine"; // fixed secondary weapon (no in-flight toggle). REQ-SHIP-06
   shieldCapacity?: number; // built-in rechargeable shield charges (0/undefined = none)
   turrets?: TurretMount[]; // mouse-aimed turrets; the weapon fires from each muzzle
 }
@@ -45,6 +46,7 @@ export const SHIPS: Record<ShipId, ShipSpec> = {
     thrust: SHIP.thrust,
     maxSpeed: SHIP.maxSpeed,
     price: 0,
+    secondary: "rocket",
   },
   deltaRaptor: {
     id: "deltaRaptor",
@@ -54,6 +56,17 @@ export const SHIPS: Record<ShipId, ShipSpec> = {
     thrust: 435, // stronger engines
     maxSpeed: 520, // higher top speed
     price: 2500,
+    secondary: "rocket",
+  },
+  seeder: {
+    id: "seeder",
+    name: "Sämann",
+    radius: 15, // balanced hull
+    turnSpeed: 4.8, // nimble catamaran
+    thrust: 390,
+    maxSpeed: 480,
+    price: 2200,
+    secondary: "mine", // the dedicated mine-layer (REQ-SHIP-06)
   },
   titan: {
     id: "titan",
@@ -63,6 +76,7 @@ export const SHIPS: Record<ShipId, ShipSpec> = {
     thrust: 90, // heavy, crawls without upgraded engines
     maxSpeed: 150, // low top speed (engine upgrade nearly doubles it)
     price: 6500,
+    secondary: "rocket",
     shieldCapacity: 1, // light base shield — the shield generator upgrade boosts it
     // two mouse-aimed turrets on the flanks (the autocannon upgrade adds a third)
     turrets: [
