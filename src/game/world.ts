@@ -47,6 +47,7 @@ import {
   ROCKET,
   MINE,
   SHOP,
+  SEEDER,
   WERFT,
   HUNTER,
   REWARD,
@@ -147,6 +148,7 @@ export interface World {
   shopIndex: number; // currently highlighted shop row (UI navigation)
   shopPage: number; // active shop page/category index (UI navigation)
   shopStock: string[]; // ids of random equipment available this shop visit
+  devShop: boolean; // dev shop (Ä): everything buyable regardless of wave/shipyard. REQ-DEV-01
   wave: number; // current wave number (1-based)
   wavesEnabled: boolean; // auto-spawn next wave when the field is cleared
   waveTimer: number; // seconds counted since the field was cleared
@@ -249,6 +251,7 @@ export function createWorld(opts: WorldOptions): World {
     shopIndex: 0,
     shopPage: 0,
     shopStock: [],
+    devShop: false,
     wave: 1,
     wavesEnabled: opts.asteroids === undefined,
     waveTimer: 0,
@@ -411,10 +414,9 @@ function updatePlanets(world: World, dt: number): void {
   } else {
     world.planetTimer -= dt;
     if (world.planetTimer <= 0) {
-      // The Titan shipyard event only defers to another ACTIVE event (convoy / bounty elite),
-      // not to ordinary battleships — so it reliably appears at its wave. REQ-WERFT-03
-      const otherEventActive = world.convoyActive || world.bases.some((b) => b.elite);
-      if (!world.werftDone && world.wavesEnabled && world.wave >= WERFT.eventWave && !otherEventActive)
+      // No event starts while another runs or a battleship is around (REQ-EVENT-03). The Titan
+      // event still gets its window because bounty/convoy pause from its wave (REQ-WERFT-03).
+      if (!world.werftDone && world.wavesEnabled && world.wave >= WERFT.eventWave && !eventBlocking(world))
         startWerftEvent(world);
       else spawnPlanet(world);
     }
@@ -524,6 +526,7 @@ function updateLanding(world: World, dt: number): void {
     world.landProgress = 0;
     world.landLock = true;
     world.atShipyard = p.kind === "shipyard"; // shipyard planets sell the Titan. REQ-WERFT-01
+    world.devShop = false; // a real landing is never the dev shop
     world.state = "shop";
     world.shopIndex = 0;
     world.shopPage = 0;
@@ -541,7 +544,22 @@ export function rollShopStock(world: World): void {
 export function closeShop(world: World): void {
   if (world.state !== "shop") return;
   world.state = "playing";
+  world.devShop = false;
   world.ship.invuln = Math.max(world.ship.invuln, 1.2);
+}
+
+/**
+ * Dev shop (Ä key): opens the shop anywhere with every gate lifted — all waves, all ships
+ * (incl. capital ships) and upgrades. Titan upgrades still require owning the Titan. REQ-DEV-01.
+ */
+export function openDevShop(world: World): void {
+  if (world.state !== "playing") return;
+  world.state = "shop";
+  world.devShop = true;
+  world.atShipyard = true; // dev: treat it as a full shipyard
+  world.shopIndex = 0;
+  world.shopPage = 0;
+  world.shopStock = SHOP.randomEquipment.slice(); // everything in stock
 }
 
 // --- Reward crates (REQ-REWARD-01) -------------------------------------
@@ -714,7 +732,12 @@ function spawnBountyElite(world: World): void {
  * Covers the shipyard defense, the bounty elite, the convoy, and any live battleship. REQ-EVENT-03.
  */
 function eventBlocking(world: World): boolean {
-  return world.werft !== null || world.convoyActive || world.bases.length > 0;
+  return eventActive(world) || world.bases.length > 0;
+}
+
+/** True while an event is actually running (used to keep battleships out of it). REQ-EVENT-03. */
+function eventActive(world: World): boolean {
+  return world.werft !== null || world.convoyActive || world.bases.some((b) => b.elite);
 }
 
 /**
@@ -895,6 +918,7 @@ function spawnEnemy(world: World): void {
   if (
     kind === "station" &&
     world.wave >= BASE.fromWave &&
+    !eventActive(world) && // no battleships on top of a running event — too much. REQ-EVENT-03
     world.bases.length < baseCapForWave(world.wave) &&
     rng.next() < baseChanceForWave(world.wave)
   ) {
@@ -1091,9 +1115,43 @@ function dropMines(world: World): void {
   world.mineAmmo -= count;
 }
 
+/**
+ * Mines drift, but creep slowly toward the nearest hostile in MINE.seekRange so they actually
+ * connect (a plain drifting mine was far too hard to land). Asteroids are ignored. REQ-SHIP-06.
+ */
 function updateMines(world: World, dt: number): void {
-  for (const m of world.mines) updateMine(m, dt, world);
+  for (const m of world.mines) {
+    let best: { position: Vec } | null = null;
+    let bestD = MINE.seekRange;
+    for (const t of [...world.enemies, ...world.bases]) {
+      const d = distance(t.position, m.position);
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
+    }
+    if (best) m.velocity = scale(normalize(sub(best.position, m.position)), MINE.seekSpeed);
+    updateMine(m, dt, world);
+  }
   world.mines = world.mines.filter((m) => !isMineGone(m));
+}
+
+/**
+ * Mine-layer: slowly forges mines up to SEEDER.magazine while the Sämann is flown.
+ * Bought mines stack on top — production just pauses above the cap. REQ-SHIP-06.
+ */
+function updateMineProduction(world: World, dt: number): void {
+  const ship = world.ship;
+  if (world.shipId !== "seeder") return;
+  if (world.mineAmmo >= SEEDER.magazine) {
+    ship.produceTimer = SEEDER.produceInterval; // full magazine — hold the next one
+    return;
+  }
+  ship.produceTimer -= dt;
+  if (ship.produceTimer <= 0) {
+    world.mineAmmo += 1;
+    ship.produceTimer = SEEDER.produceInterval;
+  }
 }
 
 /** Apply damage to an asteroid; on death score it, split it and drop boss loot. */
@@ -1324,6 +1382,7 @@ export function equipShip(world: World, id: ShipId): void {
   world.ship.turrets = (spec.turrets ?? []).map((t) => ({ ...t }));
   world.salvoQueue = []; // drop any pending swarm when switching ships. REQ-SHIP-07
   if (id === "cruiser") world.ship.produceTimer = CRUISER.produceInterval; // start forging. REQ-SHIP-07
+  if (id === "seeder") world.ship.produceTimer = SEEDER.produceInterval; // start forging mines. REQ-SHIP-06
   world.ship.hasAutocannon = id === "titan" && world.shipUpgrades.includes("autocannon");
 
   if (id === "titan") {
@@ -1721,6 +1780,9 @@ export function updateWorld(world: World, input: Input, dt: number): void {
   // Missile cruiser forges its own rockets over time + ripples out its swarm (REQ-SHIP-07)
   updateRocketProduction(world, dt);
   updateSalvo(world, dt);
+
+  // Mine-layer forges its own mines over time (REQ-SHIP-06)
+  updateMineProduction(world, dt);
 
   // Hangar wingmen fly in formation and auto-fire (REQ-SHIP-05)
   updateWingmen(world, dt);

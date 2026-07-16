@@ -22,6 +22,7 @@ import { createBattleship, createEliteBattleship } from "../src/game/base.ts";
 import { createSiege } from "../src/game/siege.ts";
 import { createCrate } from "../src/game/crate.ts";
 import { createFreighter } from "../src/game/convoy.ts";
+import { createMine } from "../src/game/mine.ts";
 import { vec, length } from "../src/engine/vector2.ts";
 import {
   SHIP,
@@ -48,6 +49,7 @@ import {
   CONVOY,
   WERFT,
   CRUISER,
+  SEEDER,
 } from "../src/game/constants.ts";
 
 const IDLE = { turnLeft: false, turnRight: false, thrust: false, fire: false, fireSecondary: false };
@@ -750,6 +752,37 @@ describe("space mines", () => {
     expect(w.secondary).toBe("rocket"); // back to rockets, no toggle needed
   });
 
+  it("a laid mine creeps toward a nearby enemy", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ship.invuln = 999;
+    const e = createEnemy(vec(500, 200), vec(0, 0), "fighter");
+    e.fireTimer = 999;
+    w.enemies.push(e);
+    w.mines.push(createMine(vec(500, 300), vec(0, 0))); // 100px below the enemy -> inside seekRange
+    const d0 = Math.abs(w.mines[0].position.y - e.position.y);
+    for (let i = 0; i < 20; i++) updateWorld(w, IDLE, 0.02);
+    const d1 = Math.abs(w.mines[0].position.y - e.position.y);
+    expect(d1).toBeLessThan(d0); // closed the gap
+  });
+
+  it("the Sämann forges mines over time up to its magazine cap", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.ownedShips.push("seeder");
+    equipShip(w, "seeder");
+    w.mineAmmo = 0;
+    const steps = Math.ceil((SEEDER.produceInterval * (SEEDER.magazine + 3)) / 0.05);
+    for (let i = 0; i < steps; i++) updateWorld(w, IDLE, 0.05);
+    expect(w.mineAmmo).toBe(SEEDER.magazine); // tops up, then stops at the cap
+  });
+
+  it("does not forge mines on other ships", () => {
+    const w = createWorld({ width: 900, height: 700, seed: 1, asteroids: 0 });
+    w.mineAmmo = 0; // Vanguard
+    const steps = Math.ceil((SEEDER.produceInterval * 3) / 0.05);
+    for (let i = 0; i < steps; i++) updateWorld(w, IDLE, 0.05);
+    expect(w.mineAmmo).toBe(0);
+  });
+
   it("dropping mines lays a field behind the ship and consumes mine ammo", () => {
     const w = createWorld({ width: 800, height: 600, seed: 1, asteroids: 0 });
     w.ship.angle = 0; // facing +x -> mines drop toward -x (behind)
@@ -1220,7 +1253,7 @@ describe("Titan battleship", () => {
     expect(w.convoyActive).toBe(false); // convoy suppressed
   });
 
-  it("starts the Titan shipyard event even with a normal battleship present", () => {
+  it("does not start the Titan shipyard event while a battleship is present", () => {
     const w = createWorld({ width: 1000, height: 700, seed: 1 });
     w.asteroids = [];
     w.enemies = [];
@@ -1229,7 +1262,24 @@ describe("Titan battleship", () => {
     w.planetTimer = 0;
     w.bases.push(createBattleship("mandible", vec(500, 350), vec(0, 0)));
     updateWorld(w, IDLE, 0.016);
-    expect(w.werft).not.toBeNull(); // shipyard event started despite the battleship
+    expect(w.werft).toBeNull(); // blocked — a battleship on top of the defense is too much. REQ-EVENT-03
+  });
+
+  it("no battleship spawns while an event is running", () => {
+    const w = createWorld({ width: 1000, height: 700, seed: 1 });
+    w.asteroids = [];
+    w.enemies = [];
+    w.bases = [];
+    w.wave = 8; // battleships are common by now
+    w.convoyActive = true; // an event is running
+    w.convoy.push(createFreighter(vec(200, 350), vec(CONVOY.speed, 0)));
+    // force many enemy spawns; a station roll would normally become a battleship
+    w.rng = { next: () => 0.1, range: (min, max) => min + (max - min) * 0.1 };
+    for (let i = 0; i < 30; i++) {
+      w.enemyTimer = 0;
+      updateWorld(w, IDLE, 0.02);
+    }
+    expect(w.bases.length).toBe(0);
   });
 
   it("no new event starts while a battleship is on the field", () => {

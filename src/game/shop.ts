@@ -170,7 +170,7 @@ export const SHOP_PAGES: ShopItemKind[] = ["ammo", "weapon", "ship", "upgrade", 
 
 /** Pages actually shown this visit: the Upgrades tab only exists at a shipyard planet. REQ-WERFT-01. */
 export function visiblePages(world: World): ShopItemKind[] {
-  return SHOP_PAGES.filter((k) => k !== "upgrade" || world.atShipyard);
+  return SHOP_PAGES.filter((k) => k !== "upgrade" || world.atShipyard || world.devShop);
 }
 
 /** Items belonging to a given page/category, in catalog order. */
@@ -180,12 +180,15 @@ export function itemsForPage(kind: ShopItemKind): ShopItem[] {
 
 /** Items on a page that are actually available this visit. REQ-SHOP-04, REQ-SHIP-05. */
 export function visibleItems(world: World, kind: ShopItemKind): ShopItem[] {
+  const dev = world.devShop; // dev shop lifts the wave/stock/shipyard gates. REQ-DEV-01
   return itemsForPage(kind).filter((i) => {
-    if ((i.unlockWave ?? 1) > world.wave) return false; // not yet unlocked this wave. REQ-SHOP-05
-    if (i.random && !world.shopStock.includes(i.id)) return false; // random equipment out of stock
-    if (i.shipyardOnly && !world.atShipyard) return false; // Titan sold only at shipyards. REQ-WERFT-01
-    // Titan upgrades need the Titan AND an orbital shipyard to fit them. REQ-WERFT-01
-    if (i.kind === "upgrade" && (!world.atShipyard || !world.ownedShips.includes("titan"))) return false;
+    if (!dev && (i.unlockWave ?? 1) > world.wave) return false; // not yet unlocked this wave. REQ-SHOP-05
+    if (!dev && i.random && !world.shopStock.includes(i.id)) return false; // random equipment out of stock
+    if (i.shipyardOnly && !dev && !world.atShipyard) return false; // capital ships only at shipyards. REQ-WERFT-01
+    if (i.kind === "upgrade") {
+      if (!world.ownedShips.includes("titan")) return false; // upgrades always need the Titan
+      if (!dev && !world.atShipyard) return false; // and normally an orbital shipyard. REQ-WERFT-01
+    }
     return true;
   });
 }
@@ -196,6 +199,7 @@ export function visibleItems(world: World, kind: ShopItemKind): ShopItem[] {
  * cluttered with everything that is still far off.
  */
 export function lockedItems(world: World, kind: ShopItemKind): ShopItem[] {
+  if (world.devShop) return []; // dev shop has nothing locked. REQ-DEV-01
   const locked = itemsForPage(kind).filter((i) => {
     if ((i.unlockWave ?? 1) <= world.wave) return false; // already unlocked
     if (i.kind === "upgrade") return false; // upgrades are Titan-/shipyard-gated, not wave-gated

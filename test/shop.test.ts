@@ -138,6 +138,30 @@ describe("shop page visibility", () => {
   });
 });
 
+// REQ-DEV-01: dev shop (Ä) lifts every gate
+describe("dev shop", () => {
+  it("shows everything regardless of wave, stock and shipyard", () => {
+    const w = newWorld(); // wave 1, not at a shipyard
+    w.devShop = true;
+    w.shopStock = []; // random gear out of stock
+    // wave-locked and shipyard-only items are all available
+    expect(visibleItems(w, "weapon").map((i) => i.id)).toEqual(["vulkan", "ballista"]);
+    expect(visibleItems(w, "ship").map((i) => i.id)).toContain("ship-titan");
+    expect(visibleItems(w, "ship").map((i) => i.id)).toContain("ship-cruiser");
+    expect(visibleItems(w, "equipment").map((i) => i.id)).toContain("equip-shield");
+    expect(visiblePages(w)).toContain("upgrade"); // upgrades tab available
+    expect(lockedItems(w, "ammo")).toEqual([]); // nothing shown as locked
+  });
+
+  it("still requires owning the Titan for its upgrades", () => {
+    const w = newWorld();
+    w.devShop = true;
+    expect(visibleItems(w, "upgrade")).toEqual([]); // no Titan -> no upgrades
+    w.ownedShips.push("titan");
+    expect(visibleItems(w, "upgrade").length).toBeGreaterThan(0);
+  });
+});
+
 // REQ-WERFT-01: the Titan is only offered at shipyard planets
 describe("shipyard-gated Titan", () => {
   it("hides the Titan in a normal shop and shows it at a shipyard", () => {

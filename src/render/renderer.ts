@@ -2355,7 +2355,7 @@ export class Renderer {
     ctx.shadowBlur = 14;
     ctx.textAlign = "left";
     ctx.font = "800 24px 'Segoe UI', system-ui, sans-serif";
-    ctx.fillText("◊ ORBITAL-SHOP", px + 26, py + 42);
+    ctx.fillText(world.devShop ? "◊ DEV-SHOP (alles frei)" : "◊ ORBITAL-SHOP", px + 26, py + 42);
     ctx.shadowBlur = 8;
     ctx.textAlign = "right";
     ctx.fillStyle = "#ffd166";
@@ -2393,7 +2393,7 @@ export class Renderer {
       ctx.font = "600 16px 'Segoe UI', system-ui, sans-serif";
       const msg =
         activeKind === "upgrade"
-          ? world.atShipyard
+          ? world.atShipyard || world.devShop
             ? "Titan-Schiff erforderlich"
             : "Nur in der Orbital-Werft"
           : "— leer —";

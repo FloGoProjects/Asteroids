@@ -46,6 +46,7 @@
     "v1.13.1": "Bugfix Schiffwechsel im Shop: der Shop unterschied nicht zwischen 'besessen' und 'ausgerüstet' -> jedes besessene Schiff zeigte AUSGERÜSTET und purchase gab 'owned' zurück, ein Wechsel war unmöglich. Neu isEquipped() (shop.ts); purchase re-equippt ein besessenes, nicht aktives Schiff/Waffe kostenlos (Result 'equipped'), nur das aktive zeigt AUSGERÜSTET, die übrigen 'WECHSELN'. Renderer nutzt isEquipped statt isOwned für das Label + WECHSELN-Zeile. Verifiziert per Unit-Tests + Offscreen-fillText-Spy (AUSGERÜSTET beim aktiven, WECHSELN beim anderen Schiff).",
     "v1.13": "Drittes Schiff 'Titan' (Schlachtschiff) mit maus-gezielten Türmen (REQ-SHIP-04). Neuer ShipSpec-Felder shieldCapacity + turrets (TurretMount[]). Träge Flugwerte, 3 Ladungen eingebaute Schilde, 3 Türme. Maus-Eingabe: keyboard.ts trackt Zeiger als Input.aim + linke Maustaste feuert (kombiniert mit Leertaste). world.ts: aimAngle aus Input.aim, fireWeapon feuert aus jeder Turmmündung entlang aimAngle (Ammo einmal pro Salve), equipShip überträgt Türme + stuft Schild monoton hoch. Renderer: drawTitanBody (Rumpf + zur Maus schwenkende Läufe), Shop-Icon, drawShip bekommt aimAngle. Shop-Item ship-titan (6500 CR). Verifiziert: 5 neue Unit-Tests + sichtbarkeits-unabhängige Offscreen-Pixelchecks (Turm-Mündung folgt Zielpunkt, Schiff/Icon rendern). HINWEIS: kein Live-Screenshot möglich (Browser-Pane hidden -> rAF pausiert).",
     "future": "Weitere Ideen: mehr Schiffe/Waffen/Gegnertypen, Highscore/Persistenz (localStorage), Soundeffekte/Musik. Belohnungs-Kisten (REQ-REWARD-01) + zwei Events (Kopfgeld-Elite REQ-EVENT-01, Konvoi-Eskorte REQ-EVENT-02) sind umgesetzt.",
+    "v1.35": "Event-/Minenleger-/Dev-Feedback. (1) Event-Exklusivität beidseitig (REQ-EVENT-03): neuer eventActive-Helfer; spawnEnemy spawnt keine Schlachtschiffe mehr während eines Events, und der Werft-Trigger respektiert wieder eventBlocking (kehrt die v1.30-Lockerung um — das Werft-Fenster bleibt trotzdem da, weil Kopfgeld/Konvoi ab Welle 5 pausieren). (2) Minenleger gestärkt (REQ-SHIP-06): updateMines lässt Minen langsam auf Gegner/Schlachtschiffe in MINE.seekRange (150) zukriechen (seekSpeed 70, Asteroiden ignoriert); neue SEEDER-Konstanten + updateMineProduction (mineAmmo wächst alle 3s bis 9). (3) Dev-Taste 9 entfernt, dafür REQ-DEV-01: Ä öffnet openDevShop — alle Gates (unlockWave/random/shipyardOnly) aufgehoben, Upgrades weiterhin nur mit Titan; Renderer-Titel 'DEV-SHOP'. Tests 253->259. tsc strict grün, per echtem Ä-Tastendruck + Offscreen verifiziert.",
     "v1.34": "Hydra-Feinschliff (Nutzer-Feedback). (1) Raketen regenerieren schneller (CRUISER.produceInterval 3.5->2.0). (2) Salve ist jetzt ein gestaffelter Schwarm: salvoSize 3->4, neue salvoGap 0.07 -> Raketen starten nacheinander statt gleichzeitig (world.salvoQueue/salvoTimer + updateSalvo), damit sie nicht aufeinander fliegen; salvoSpread 0.42->0.25. (3) acquireTargets (bis zu N nächste Ziele im Kegel, inkl. bases) verteilt die Schwarm-Raketen per Round-Robin auf mehrere Ziele. Schiffwechsel leert die Queue. Tests 252->253 (Salve-Test auf gestaffelt umgestellt + neuer Multi-Ziel-Test). tsc strict grün.",
     "v1.33": "Raketenkreuzer 'Hydra' als zweites Großkampfschiff (REQ-SHIP-07). Design per SVG-Konzept gewählt (C Hydra). constants: ShipId += 'cruiser', SHIPS.cruiser (1 Turm, secondary 'rocket', beweglicher als Titan), CRUISER {magazine 8, produceInterval 3.5, salvoSize 3, salvoSpread 0.42, salvoCooldown 1.1}. ship.produceTimer. world: updateRocketProduction (füllt rocketAmmo bis magazine auf, pausiert darüber, nur auf dem Kreuzer) + fireRocketSalvo (Fächer entlang aimAngle, je Rakete eigene Zielerfassung) im Sekundärfeuer; equipShip startet den Forge-Timer. shop: ship-cruiser (shipyardOnly, 6000 CR). renderer: drawCruiserBody (Rumpf + zwei Pods mit je nach Magazin rot leuchtenden Sprengköpfen + schwenkender Hauptturm) + Shop-Icon; drawShip bekommt loadedRockets. Abgrenzung zum Titan: keine Titan-Upgrades, nur ein Turm. Tests 247->252. tsc strict grün, offscreen verifiziert (Pods leer 0 vs geladen 33 px).",
     "v1.32": "Hübschere Gegner-Raketen (Nutzer-Feedback: sahen wie 'Trichterchen' aus). renderer.drawSiege komplett neu — Design per SVG-Konzept gewählt (A Klassik): roter Spitz-Sprengkopf mit Warnlicht, gelber Warnring, Metallrumpf (roundRect), zwei Heckflossen, blaue Triebwerksflamme (lighter-Composite, zweistufig blau/weiß). Flacker-Untergrenze angehoben (flick 0.78±0.22 statt 0.6±0.4), damit das Triebwerk nie ausgeht. Gilt für Belagerungs- und Jäger-Raketen. Reine Render-Änderung, Tests unverändert 247. Offscreen verifiziert (Flamme durchgehend 45-53 px, Sprengkopf 42 px, Rumpf 230 px).",
@@ -70,8 +71,8 @@
   "testStatus": {
     "lastRun": "2026-07-13",
     "summary": "alle Tests grün (216/216); TypeScript strict typecheck ohne Fehler. NEU v1.20 (Nutzerwunsch): (A) Progressiver Shop-Unlock (REQ-SHOP-05) — Items schalten nach Welle frei (unlockWave), gesperrt wird nur das NÄCHSTE Unlock je Seite als ausgegrauter '🔒 ab Welle N'-Teaser angezeigt (kein Zumüllen); Schild erst ab Welle 3. (B) Titan-Werft-Verteidigung (REQ-WERFT-01) — ab Welle 5 einmaliges Sonder-Level: Shipyard-Planet driftet in die Mitte, wird von langsamen Belagerungsraketen (neue Entität siege.ts) beschossen; abfangen mit Projektilen; Werft-Schadensbalken, bei 0 scheitert das Event (kommt neu), sonst gewonnen -> Titan an der Werft kaufbar. Danach ~1/3 der Planeten sind Werften; Titan + Upgrades NUR dort (shipyardOnly/atShipyard-Gating); der UPGRADES-Tab (visiblePages) erscheint nur an Werft-Planeten. Verifiziert per Unit-Tests (werft.test 10, shop.test-Gruppen) + Offscreen-Render (Werft-Ring/HUD, Tab-Spy: normal 4 Tabs, Werft 5 Tabs).",
-    "total": 253,
-    "passed": 253,
+    "total": 259,
+    "passed": 259,
     "failed": 0,
     "typecheck": "pass",
     "command": "npm test"
@@ -1090,11 +1091,17 @@
       "priority": "should",
       "description": "Es startet kein neues Event (Werft-Verteidigung, Kopfgeld-Elite, Konvoi), solange bereits ein Event läuft ODER ein großes Schlachtschiff auf dem Feld ist. So überlagern sich die Events nicht und das Spiel wird nicht überladen.",
       "acceptanceCriteria": [
-        "eventBlocking(world) = werft!=null || convoyActive || bases.length>0.",
-        "updateBounty, updateConvoy und der Werft-Trigger (updatePlanets) starten nur, wenn !eventBlocking; die Timer laufen währenddessen effektiv weiter/erneut."
+        "eventActive(world) = werft!=null || convoyActive || eine Elite lebt. eventBlocking(world) = eventActive || bases.length>0.",
+        "updateBounty, updateConvoy UND der Werft-Trigger (updatePlanets) starten nur, wenn !eventBlocking — ein Schlachtschiff im Bild verhindert jeden Event-Start.",
+        "Umgekehrt spawnt spawnEnemy keine Schlachtschiffe, solange eventActive — kein Schlachtschiff oben drauf während eines Events.",
+        "Das Werft-Event bekommt sein Fenster trotzdem, weil ab seiner Welle Kopfgeld/Konvoi pausieren (REQ-WERFT-03) und Schlachtschiffe nach BASE.life abdriften."
       ],
       "testFile": "test/world.test.ts",
-      "tests": ["no new event starts while a battleship is on the field"],
+      "tests": [
+        "no new event starts while a battleship is on the field",
+        "does not start the Titan shipyard event while a battleship is present",
+        "no battleship spawns while an event is running"
+      ],
       "status": "passing"
     },
     {
@@ -1107,12 +1114,17 @@
         "ShipSpec.secondary ('rocket'|'mine') je Schiff; SHIPS.seeder (secondary 'mine'), die anderen 'rocket'. equipShip setzt world.secondary = spec.secondary.",
         "cycleSecondary und die X-Taste sind entfernt.",
         "ship-seeder ist im Shop kaufbar (unlockWave 4); Kauf rüstet es aus und stellt die Sekundärwaffe auf Minen.",
-        "Renderer zeichnet den Sämann (drawSeederBody: Doppelrumpf-Katamaran + Heck-Streutrommel) und ein Shop-Icon (ship-seeder)."
+        "Renderer zeichnet den Sämann (drawSeederBody: Doppelrumpf-Katamaran + Heck-Streutrommel) und ein Shop-Icon (ship-seeder).",
+        "Minen sind nicht mehr rein passiv: updateMines lässt jede Mine langsam auf den nächsten Gegner/Schlachtschiff in MINE.seekRange zukriechen (MINE.seekSpeed); Asteroiden werden ignoriert.",
+        "updateMineProduction: beim Fliegen des Sämann wächst world.mineAmmo alle SEEDER.produceInterval um 1 bis SEEDER.magazine (gekaufte Minen darüber bleiben, Produktion pausiert dann); andere Schiffe produzieren nichts."
       ],
       "testFile": "test/world.test.ts, test/shop.test.ts",
       "tests": [
         "the secondary weapon is ship-bound: the Sämann lays mines, other ships fire rockets",
         "buys the Sämann mine-layer: owns, equips, and its secondary is mines",
+        "a laid mine creeps toward a nearby enemy",
+        "the Sämann forges mines over time up to its magazine cap",
+        "does not forge mines on other ships",
         "groups items into ammo, weapon, ship, upgrade and equipment pages"
       ],
       "status": "passing"
@@ -1139,6 +1151,26 @@
         "splits the swarm across multiple targets in the zone",
         "a salvo never fires more rockets than are loaded",
         "the Hydra cruiser is shipyard-only and equips with its rocket battery"
+      ],
+      "status": "passing"
+    },
+    {
+      "id": "REQ-DEV-01",
+      "title": "Dev-Shop (Ä-Taste)",
+      "category": "tooling",
+      "priority": "could",
+      "description": "Zum Testen öffnet die Ä-Taste im Spiel einen Shop, in dem jede Sperre aufgehoben ist: alle Wellen-Unlocks, alle Zufalls-Ausrüstung und die werft-gebundenen Großkampfschiffe (Titan, Hydra) sind sofort kaufbar. Ersetzt die alte Dev-Taste 9 (die pauschal Zeug freischaltete).",
+      "acceptanceCriteria": [
+        "world.devShop; openDevShop(world) öffnet aus dem Spiel heraus den Shop (setzt devShop + atShipyard, füllt shopStock) — nur im state 'playing'.",
+        "visibleItems ignoriert bei devShop unlockWave, random/shopStock und shipyardOnly; visiblePages zeigt den Upgrades-Tab; lockedItems liefert nichts.",
+        "Titan-Upgrades brauchen weiterhin den besessenen Titan (auch im Dev-Shop).",
+        "closeShop und ein echtes Landen setzen devShop zurück; der Renderer zeigt den Titel 'DEV-SHOP (alles frei)'.",
+        "Die alte Dev-Taste 9 in main.ts ist entfernt."
+      ],
+      "testFile": "test/shop.test.ts",
+      "tests": [
+        "shows everything regardless of wave, stock and shipyard",
+        "still requires owning the Titan for its upgrades"
       ],
       "status": "passing"
     },

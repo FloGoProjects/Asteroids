@@ -519,6 +519,14 @@ export const MINE = {
   packSize: 9, // mines per shop purchase
   price: 500, // shop cost per pack
   lootGrant: 4, // mines from a loot pickup
+  seekRange: 150, // px: a laid mine creeps toward hostiles inside this range. REQ-SHIP-06
+  seekSpeed: 70, // px/s creep speed toward the nearest hostile (slow — it's a mine, not a rocket)
+};
+
+/** Mine-layer "Sämann": forges its own mines over time, like the cruiser does with rockets. REQ-SHIP-06. */
+export const SEEDER = {
+  magazine: 9, // auto-production tops the mine pool up to this many
+  produceInterval: 3.0, // seconds to forge one mine
 };
 
 // The two secondary weapons share the S / down fire button. REQ-MINE-01.

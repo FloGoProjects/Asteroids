@@ -7,6 +7,7 @@ import {
   cycleWeapon,
   cycleAmmo,
   closeShop,
+  openDevShop,
   chooseReward,
   World,
 } from "./game/world.ts";
@@ -15,7 +16,6 @@ import { Renderer } from "./render/renderer.ts";
 import { Particles } from "./render/particles.ts";
 import { Toasts } from "./render/toasts.ts";
 import { fromAngle, add } from "./engine/vector2.ts";
-import { AMMO } from "./game/constants.ts";
 import { visiblePages, visibleItems, purchase } from "./game/shop.ts";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -126,18 +126,8 @@ window.addEventListener("keydown", (e) => {
   // cycle through owned weapons (E) / ammo types (Q). Secondary weapon is ship-bound now. REQ-SHIP-06
   else if (e.code === "KeyE") cycleWeapon(world);
   else if (e.code === "KeyQ") cycleAmmo(world);
-  // DEV: temporary unlock until the shop exists (remove before release)
-  else if (e.code === "Digit9") {
-    if (!world.ownedWeapons.includes("vulkan")) world.ownedWeapons.push("vulkan");
-    if (!world.ownedWeapons.includes("ballista")) world.ownedWeapons.push("ballista");
-    if (!world.ownedShips.includes("deltaRaptor")) world.ownedShips.push("deltaRaptor");
-    if (!world.ownedShips.includes("titan")) world.ownedShips.push("titan");
-    world.ammoCounts.ap += AMMO.ap.packSize;
-    world.ammoCounts.explosive += AMMO.explosive.packSize;
-    world.rocketAmmo += 10;
-    world.mineAmmo += 12;
-    world.credits += 5000;
-  }
+  // DEV: Ä opens a shop with every gate lifted (all waves, capital ships, upgrades). REQ-DEV-01
+  else if (e.key === "ä" || e.key === "Ä" || e.code === "Quote") openDevShop(world);
 });
 
 resize();
