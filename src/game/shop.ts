@@ -244,6 +244,11 @@ export function isEquipped(world: World, item: ShopItem): boolean {
   return false;
 }
 
+/** What this item costs right now — free in the dev shop. REQ-DEV-01. */
+export function itemPrice(world: World, item: ShopItem): number {
+  return world.devShop ? 0 : item.price;
+}
+
 /** Attempt to buy an item, mutating the world's credits/loadout. */
 export function purchase(world: World, item: ShopItem): PurchaseResult {
   // Owned ships/weapons can be re-equipped for free — switch loadout at the planet. REQ-SHIP-03.
@@ -255,9 +260,10 @@ export function purchase(world: World, item: ShopItem): PurchaseResult {
   }
   if (isOwned(world, item)) return "owned"; // installed shield — nothing to switch
   if (item.id === "extra-life" && world.lives >= GAME.maxLives) return "max";
-  if (world.credits < item.price) return "insufficient";
+  const price = itemPrice(world, item); // free in the dev shop. REQ-DEV-01
+  if (world.credits < price) return "insufficient";
 
-  world.credits -= item.price;
+  world.credits -= price;
 
   if (item.kind === "weapon") {
     const id = item.ref as WeaponId;

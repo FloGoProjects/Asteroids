@@ -15,6 +15,7 @@ import { createKeyboardInput } from "./input/keyboard.ts";
 import { Renderer } from "./render/renderer.ts";
 import { Particles } from "./render/particles.ts";
 import { Toasts } from "./render/toasts.ts";
+import { Sfx } from "./render/sfx.ts";
 import { fromAngle, add } from "./engine/vector2.ts";
 import { visiblePages, visibleItems, purchase } from "./game/shop.ts";
 
@@ -27,16 +28,31 @@ let renderer: Renderer;
 let world: World;
 const particles = new Particles();
 const toasts = new Toasts();
+const sfx = new Sfx();
 const input = createKeyboardInput();
 
 const LOOT_HUE: Record<string, number> = { shield: 190, antigrav: 275, ammo: 45, rocket: 22, mine: 0 };
 
 function attachHooks(w: World): void {
-  w.onExplosion = (pos, big) => particles.emitExplosion(pos, big);
-  w.onHit = (pos) => particles.emitSpark(pos);
-  w.onPickup = (pos, kind) => particles.emitPickup(pos, LOOT_HUE[kind] ?? 190);
-  w.onShieldHit = (pos) => particles.emitPickup(pos, 190); // cyan shield spark
+  w.onExplosion = (pos, big) => {
+    particles.emitExplosion(pos, big);
+    sfx.play(big ? "explosionBig" : "explosionSmall");
+  };
+  w.onHit = (pos) => {
+    particles.emitSpark(pos);
+    sfx.play("hit");
+  };
+  w.onPickup = (pos, kind) => {
+    particles.emitPickup(pos, LOOT_HUE[kind] ?? 190);
+    sfx.play("pickup");
+  };
+  w.onShieldHit = (pos) => {
+    particles.emitPickup(pos, 190); // cyan shield spark
+    sfx.play("shield");
+  };
   w.onToast = (text, pos) => toasts.push(text, pos.x, pos.y);
+  w.onShoot = () => sfx.play("shoot");
+  w.onLand = () => sfx.play("land");
 }
 
 function newGame(): void {
@@ -67,7 +83,10 @@ function resize(): void {
 }
 
 window.addEventListener("resize", resize);
+// Browsers only allow audio after a user gesture — unlock on the first key/click.
+window.addEventListener("pointerdown", () => sfx.resume());
 window.addEventListener("keydown", (e) => {
+  sfx.resume();
   // Shop menu navigation (world is paused). Arrows or WASD.
   if (world.state === "shop") {
     const pages = visiblePages(world);
@@ -133,6 +152,20 @@ window.addEventListener("keydown", (e) => {
 resize();
 newGame();
 
+// Sound cues for state changes the world has no hook for (REQ-SFX-01).
+let prevGameOver = false;
+let prevEventBanner = false;
+
+function syncSfxCues(): void {
+  const over = world.state === "gameover";
+  if (over && !prevGameOver) sfx.play("gameover");
+  prevGameOver = over;
+
+  const banner = world.eventBanner !== null;
+  if (banner && !prevEventBanner) sfx.play("event");
+  prevEventBanner = banner;
+}
+
 // Fixed timestep loop for deterministic physics.
 const STEP = 1 / 120;
 let last = performance.now();
@@ -161,6 +194,7 @@ function frame(now: number): void {
     }
   }
 
+  syncSfxCues();
   particles.update(dt);
   toasts.update(dt);
   renderer.render(world, particles, dt);

@@ -7,6 +7,7 @@ import {
   itemsForPage,
   visibleItems,
   lockedItems,
+  itemPrice,
   purchase,
   isOwned,
   isEquipped,
@@ -151,6 +152,24 @@ describe("dev shop", () => {
     expect(visibleItems(w, "equipment").map((i) => i.id)).toContain("equip-shield");
     expect(visiblePages(w)).toContain("upgrade"); // upgrades tab available
     expect(lockedItems(w, "ammo")).toEqual([]); // nothing shown as locked
+  });
+
+  it("makes everything free, so it buys with zero credits", () => {
+    const w = newWorld();
+    w.devShop = true;
+    w.credits = 0;
+    expect(itemPrice(w, item("ship-titan"))).toBe(0);
+    const r = purchase(w, item("ship-titan")); // 6500 CR normally
+    expect(r).toBe("ok");
+    expect(w.ownedShips).toContain("titan");
+    expect(w.credits).toBe(0); // nothing deducted
+  });
+
+  it("charges the normal price outside the dev shop", () => {
+    const w = newWorld();
+    w.credits = 0;
+    expect(itemPrice(w, item("ballista"))).toBe(WEAPONS.ballista.price);
+    expect(purchase(w, item("ballista"))).toBe("insufficient");
   });
 
   it("still requires owning the Titan for its upgrades", () => {

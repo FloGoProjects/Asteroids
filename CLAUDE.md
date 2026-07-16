@@ -39,7 +39,8 @@ git push                    # löst Deploy automatisch aus
 - **Events**: Kopfgeld-Elite (REQ-EVENT-01, `createEliteBattleship`/`updateBounty`, gebufftes Schlachtschiff mit `BOUNTY`) und Konvoi-Eskorte (REQ-EVENT-02, `convoy.ts`/`updateConvoy`, Frachter schützen; Raider = `Enemy.hunting==='convoy'`). Beide droppen Belohnungs-Kisten.
 - **Titan-Werft-Event** (REQ-WERFT-01): ab Welle `WERFT.eventWave` verteidigt man einen Shipyard-Planeten gegen Belagerungsraketen; Zustand in `world.werft`; danach ist der Titan nur an Shipyard-Planeten (`atShipyard`) kaufbar. Shop-Items schalten per `unlockWave` nach Welle frei (REQ-SHOP-05).
 - `src/input/keyboard.ts` — Tastatureingabe
-- `src/render/` — Zeichnen: `renderer` (Haupt-Renderer), `particles`
+- `src/render/` — Präsentation: `renderer` (Haupt-Renderer), `particles`, `toasts` (Pickup-Texte), `sfx` (Web-Audio-Sounds)
+- **Sounds** (REQ-SFX-01): `sfx.ts` synthetisiert alles selbst (keine Assets). `SfxGate` verhindert Tonchaos: Mindestabstand je Sound + gemeinsames Budget der niederprioren Ebene + Stimmen-Limit; wichtige Sounds umgehen das. Audio startet erst nach einer Nutzergeste (`sfx.resume()`).
 - `test/` — Vitest-Specs (spiegeln `src/game`, `src/engine`)
 - `requirements.json` — Anforderungen (Single Source of Truth, via `reqcheck` geprüft)
 

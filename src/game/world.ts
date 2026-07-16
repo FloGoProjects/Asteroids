@@ -178,6 +178,7 @@ export interface World {
   onPickup?: (pos: Vec, kind: LootKind) => void; // loot collected
   onShieldHit?: (pos: Vec) => void; // shield absorbed a hit
   onToast?: (text: string, pos: Vec) => void; // floating "+N item" pickup text
+  onShoot?: () => void; // the player's weapon fired (sfx). REQ-SFX-01
 }
 
 function spawnAsteroid(world: World, size: AsteroidSize = "large"): Asteroid {
@@ -1461,6 +1462,7 @@ function fireWeapon(world: World): void {
     }
   }
   world.fireCooldown = spec.cooldown;
+  world.onShoot?.(); // REQ-SFX-01
 }
 
 /** Nearest enemy/asteroid within `range` of `from` (any direction), or null. */

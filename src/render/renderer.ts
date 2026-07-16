@@ -12,7 +12,7 @@ import { Mine } from "../game/mine.ts";
 import { SiegeMissile } from "../game/siege.ts";
 import { Wingman } from "../game/wingman.ts";
 import { Base } from "../game/base.ts";
-import { visiblePages, visibleItems, lockedItems, isOwned, isEquipped, ShopItem } from "../game/shop.ts";
+import { visiblePages, visibleItems, lockedItems, isOwned, isEquipped, itemPrice, ShopItem } from "../game/shop.ts";
 import { WEAPONS, AMMO, PLANET, LOOT, GAME, SHIELD, STATION, SHIPS, AUTOCANNON, TRACTOR, DEFLECTOR, WINGMAN, BOUNTY, ShipId, LootKind } from "../game/constants.ts";
 import { fromAngle, add, vec, distance, Vec } from "../engine/vector2.ts";
 import { Particles } from "./particles.ts";
@@ -2405,7 +2405,8 @@ export class Renderer {
       const selected = i === world.shopIndex;
       const equipped = isEquipped(world, item);
       const switchable = !equipped && isOwned(world, item); // owned but not active
-      const affordable = world.credits >= item.price;
+      const price = itemPrice(world, item); // 0 in the dev shop. REQ-DEV-01
+      const affordable = world.credits >= price;
 
       if (selected) {
         ctx.fillStyle = "rgba(127,231,217,0.12)";
@@ -2451,9 +2452,9 @@ export class Renderer {
         ctx.font = "700 16px 'Segoe UI', system-ui, sans-serif";
         ctx.fillText("MAX", px + panelW - 30, y + rowH / 2 + 2);
       } else {
-        ctx.fillStyle = affordable ? "#ffd166" : "#ff5a5a";
+        ctx.fillStyle = world.devShop ? "#5fdc7a" : affordable ? "#ffd166" : "#ff5a5a";
         ctx.font = "700 18px 'Segoe UI', system-ui, sans-serif";
-        ctx.fillText(`${item.price} CR`, px + panelW - 30, y + rowH / 2 - 4);
+        ctx.fillText(world.devShop ? "GRATIS" : `${price} CR`, px + panelW - 30, y + rowH / 2 - 4);
         ctx.fillStyle = "#7f8ea3";
         ctx.font = "500 12px 'Segoe UI', system-ui, sans-serif";
         if (item.kind === "ammo") {
